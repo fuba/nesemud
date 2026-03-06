@@ -42,6 +42,7 @@ docker compose exec -T nesd ffmpeg -version
 - RetroArch project: https://github.com/libretro/RetroArch
 - FCEUX project (FM2 関連エコシステム): https://github.com/TASEmulators/fceux
 - NESDev emulator tests overview: https://www.nesdev.org/wiki/Emulator_tests
+- NES test ROM corpus mirror used by `scripts/fetch-test-roms.sh`: https://github.com/christopherpow/nes-test-roms
 
 ## 6. メンテナ向けポリシー
 - 外部コードをコピーした場合は必ず出典 URL とライセンスを追記すること。

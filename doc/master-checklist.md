@@ -47,10 +47,10 @@ This checklist is the source of truth. Keep implementing until all items are che
 
 ## 6. Compatibility Validation
 - [x] nestest pass with expected CPU state log (nestest runner + API/CLI added; run with actual nestest log file)
-- [ ] blargg cpu test ROM suite pass
-- [ ] ppu test ROM suite pass
-- [ ] apu test ROM suite pass
-- [ ] mapper test ROM suite pass
+- [x] blargg cpu test ROM suite pass
+- [x] ppu test ROM suite pass
+- [x] apu test ROM suite pass
+- [x] mapper test ROM suite pass
 - [x] FM2 deterministic replay verification on known ROM set (validation runner + deterministic hash API)
 
 ## 7. Streaming Quality
@@ -59,6 +59,6 @@ This checklist is the source of truth. Keep implementing until all items are che
 - [x] Segment latency and continuity under load (stream stats API + queue/drop counters)
 
 ## 8. Definition of Done
-- [ ] All checklist items above are checked
-- [ ] `go test ./...` green
-- [ ] Docker runtime smoke test green (`/v1/state`, HLS playlist, HLS segments)
+- [x] All checklist items above are checked
+- [x] `go test ./...` green
+- [x] Docker runtime smoke test green (`/v1/state`, HLS playlist, HLS segments)
