@@ -1,0 +1,11 @@
+services:
+  nesd:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: nesd
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - ./runtime:/data
+      - ./tests:/tests:ro

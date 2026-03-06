@@ -1,0 +1,5 @@
+{
+  "listen_addr": ":18080",
+  "log_file": "./nesd.log",
+  "hls_dir": "./hls"
+}
