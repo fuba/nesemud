@@ -7,8 +7,8 @@ import (
 	"log"
 	"os"
 
-	"nes_recorder/internal/config"
-	"nes_recorder/internal/daemon"
+	"nesemud/internal/config"
+	"nesemud/internal/daemon"
 )
 
 func main() {

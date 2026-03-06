@@ -1,50 +1,50 @@
 # Third-Party Notices
 
-このファイルは、`nes_recorder` の設計・運用で参照する外部ソフトウェア/仕様と、ライセンス上の取り扱い方針を整理したものです。
+This file documents external software/specs referenced by `nesemud` and the licensing/compliance handling policy.
 
-## 1. 本リポジトリのコードライセンス
-- `nes_recorder` 本体コード: MIT
-- ライセンステキスト: [`LICENSE`](./LICENSE)
+## 1. Project Code License
+- `nesemud` source code: MIT
+- License text: [`LICENSE`](./LICENSE)
 
-## 2. バンドルされる実行依存
-### 2.1 FFmpeg（Docker イメージ内）
-- 用途: HLS 生成（video/audio エンコード）
-- 取得方法: Docker build 中に Debian パッケージをインストール
-- 重要: FFmpeg のライセンスはビルド構成で変わります（LGPL/GPL）
+## 2. Bundled Runtime Dependencies
+### 2.1 FFmpeg (inside Docker image)
+- Purpose: HLS generation (video/audio encoding)
+- Installation: Debian package installed during Docker build
+- Important: FFmpeg licensing can differ by build configuration (LGPL/GPL)
 
-運用時の確認コマンド:
+Check command:
 ```bash
 docker compose exec -T nesd ffmpeg -version
 ```
 
-`configuration:` に `--enable-gpl` が含まれる場合は GPL 条件での配布を要する可能性があります。配布形態に応じて法務判断を行ってください。
+If `configuration:` includes `--enable-gpl`, distribution may require GPL obligations depending on your distribution model. Confirm with legal/compliance review as needed.
 
-## 3. 参照した仕様/互換インターフェース
-### 3.1 RetroArch command インターフェース（互換 API）
-- 本実装は command 名の互換を意図しており、`/v1/retroarch/command` を提供します。
-- 互換対象の API 名/コマンド名を参照しているだけで、RetroArch ソースコードは本リポジトリに取り込んでいません。
+## 3. Referenced Specs / Compatibility Interfaces
+### 3.1 RetroArch command interface (compatibility API)
+- This implementation provides `/v1/retroarch/command` for command-level compatibility.
+- It references API/command naming conventions only; RetroArch source code is not vendored into this repository.
 
-### 3.2 FM2 replay 形式（入力ログ）
-- 本実装は FM2 のフレーム入力行を読み取り、P1/P2 のボタン列を再生します。
-- FM2 は互換フォーマットとして参照しており、外部実装コードの転載はしていません。
+### 3.2 FM2 replay format (input log)
+- This implementation parses FM2 frame input lines and replays P1/P2 button states.
+- FM2 is used as a compatibility format reference; no external implementation code is copied.
 
-## 4. 互換検証ROM・アセットのライセンス
-`tests/roms`・`tests/fm2` に配置する外部アセット（ROM、ログ、リプレイ）は、配布元ごとにライセンス条件が異なります。  
-このリポジトリでは原則としてそれらを同梱せず、利用者が取得・配置する前提です。
+## 4. Compatibility ROM / Asset Licensing
+External assets under `tests/roms` and `tests/fm2` (ROMs, logs, replays) can have different licenses by upstream source.
+This repository generally does not bundle them by default and assumes users fetch/place them themselves.
 
-注意点:
-- テスト ROM を再配布する場合は、各配布元ライセンスに従ってください。
-- 商用 ROM/ゲームデータは権利者許諾なしで配布しないでください。
+Notes:
+- If you redistribute test ROMs, follow the original upstream license terms.
+- Do not redistribute commercial ROM/game data without explicit rights holder permission.
 
-## 5. ソース/参照先（ライセンス確認用）
+## 5. Sources / References (for license verification)
 - FFmpeg legal: https://ffmpeg.org/legal.html
 - FFmpeg project: https://ffmpeg.org/
 - RetroArch project: https://github.com/libretro/RetroArch
-- FCEUX project (FM2 関連エコシステム): https://github.com/TASEmulators/fceux
+- FCEUX project (FM2 ecosystem): https://github.com/TASEmulators/fceux
 - NESDev emulator tests overview: https://www.nesdev.org/wiki/Emulator_tests
 - NES test ROM corpus mirror used by `scripts/fetch-test-roms.sh`: https://github.com/christopherpow/nes-test-roms
 
-## 6. メンテナ向けポリシー
-- 外部コードをコピーした場合は必ず出典 URL とライセンスを追記すること。
-- 外部バイナリを配布アーティファクトに含める場合は、再配布条件（著作権表示・ソース開示など）を確認すること。
-- このファイルをリリース前チェック項目に含め、差分があれば更新すること。
+## 6. Maintainer Policy
+- If external code is copied, always add source URL and license details.
+- If external binaries are included in deliverables, verify redistribution obligations (copyright notice/source requirements).
+- Include this file in pre-release checks and update it whenever dependencies/references change.

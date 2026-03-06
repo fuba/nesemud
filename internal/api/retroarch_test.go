@@ -6,7 +6,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"nes_recorder/internal/nes"
+	"nesemud/internal/nes"
 )
 
 func TestRetroArchCommandCompatibilityForms(t *testing.T) {

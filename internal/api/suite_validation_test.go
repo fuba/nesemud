@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"nes_recorder/internal/nes"
+	"nesemud/internal/nes"
 )
 
 func TestSuiteValidationEndpoint(t *testing.T) {

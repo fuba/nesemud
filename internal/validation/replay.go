@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"os"
 
-	"nes_recorder/internal/nes"
+	"nesemud/internal/nes"
 )
 
 type ReplayValidationRequest struct {

@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	"nes_recorder/internal/nes"
+	"nesemud/internal/nes"
 )
 
 type NESTestRequest struct {

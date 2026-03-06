@@ -12,10 +12,10 @@ import (
 	"syscall"
 	"time"
 
-	"nes_recorder/internal/api"
-	"nes_recorder/internal/config"
-	"nes_recorder/internal/nes"
-	"nes_recorder/internal/streaming"
+	"nesemud/internal/api"
+	"nesemud/internal/config"
+	"nesemud/internal/nes"
+	"nesemud/internal/streaming"
 )
 
 type Service struct {

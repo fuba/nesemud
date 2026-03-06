@@ -9,9 +9,9 @@ import (
 	"strconv"
 	"strings"
 
-	"nes_recorder/internal/nes"
-	"nes_recorder/internal/streaming"
-	"nes_recorder/internal/validation"
+	"nesemud/internal/nes"
+	"nesemud/internal/streaming"
+	"nesemud/internal/validation"
 )
 
 type MemoryResponse struct {

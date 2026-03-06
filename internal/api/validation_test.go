@@ -9,8 +9,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"nes_recorder/internal/nes"
-	"nes_recorder/internal/streaming"
+	"nesemud/internal/nes"
+	"nesemud/internal/streaming"
 )
 
 func TestReplayValidationEndpoint(t *testing.T) {

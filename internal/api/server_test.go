@@ -7,7 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"nes_recorder/internal/nes"
+	"nesemud/internal/nes"
 )
 
 func TestMemoryPeekPokeAndFM2Reset(t *testing.T) {

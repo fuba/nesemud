@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"os"
 
-	"nes_recorder/internal/validation"
+	"nesemud/internal/validation"
 )
 
 func main() {
