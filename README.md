@@ -23,6 +23,22 @@ Stop:
 docker compose down
 ```
 
+## Environment Profiles
+- Default profile is `PRODUCTION`
+- Local development profile is `DEVELOPMENT`
+
+`docker compose` reads `.env` automatically.
+
+Example files:
+- `.env.example` (default):
+  - `ENV=PRODUCTION`
+  - `NESD_CONTAINER_NAME=nesd`
+- `.env` (local dev):
+  - `ENV=DEVELOPMENT`
+  - `NESD_CONTAINER_NAME=nesd-dev`
+
+Container name is controlled by `NESD_CONTAINER_NAME` in `docker-compose.yml`.
+
 ## Manuals
 - Full operations manual: [`doc/OPERATIONS_MANUAL.md`](./doc/OPERATIONS_MANUAL.md)
 - Test ROM assets: [`doc/rom-test-assets.md`](./doc/rom-test-assets.md)

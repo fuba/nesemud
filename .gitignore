@@ -4,3 +4,5 @@ tests/roms/*.nes
 tests/roms/*.log
 !tests/roms/.gitkeep
 tests/fm2/*.fm2
+
+.env

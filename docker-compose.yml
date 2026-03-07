@@ -3,9 +3,11 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: nesd
+    container_name: ${NESD_CONTAINER_NAME:-nesd}
     restart: unless-stopped
     network_mode: host
+    environment:
+      - ENV=${ENV:-PRODUCTION}
     volumes:
       - ./runtime:/data
       - ./tests:/tests:ro
