@@ -9,6 +9,7 @@ const openAPISpec = `{
   "paths": {
     "/v1/state": {"get": {"responses": {"200": {"description": "ok"}}}},
     "/v1/rom/load": {"post": {"responses": {"202": {"description": "accepted"}}}},
+    "/v1/rom/upload": {"post": {"responses": {"202": {"description": "accepted"}}}},
     "/v1/control/reset": {"post": {"responses": {"202": {"description": "accepted"}}}},
     "/v1/replay/fm2": {"post": {"responses": {"202": {"description": "accepted"}}}},
     "/v1/memory/{addr}": {

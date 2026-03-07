@@ -242,7 +242,7 @@ func (p *ppu) renderSprites(c *Console, dst []byte, bgOpaque []bool) {
 	if p.ctrl&0x08 != 0 {
 		spritePatternBase = 0x1000
 	}
-	for i := 0; i < 64; i++ {
+	for i := 63; i >= 0; i-- {
 		o := i * 4
 		sy := int(p.oam[o]) + 1
 		tile := p.oam[o+1]

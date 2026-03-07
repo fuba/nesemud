@@ -10,6 +10,10 @@ func (c *Console) LoadROMFromFile(path string) error {
 	if err != nil {
 		return err
 	}
+	return c.LoadROMContent(data)
+}
+
+func (c *Console) LoadROMContent(data []byte) error {
 	cart, err := LoadINES(data)
 	if err != nil {
 		return err

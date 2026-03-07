@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/json"
 	"os"
+	"strings"
 )
 
 type Config struct {
@@ -21,7 +22,9 @@ func Default() Config {
 
 func Load(path string) (Config, error) {
 	if path == "" {
-		return Default(), nil
+		cfg := Default()
+		applyEnvOverrides(&cfg)
+		return cfg, nil
 	}
 	b, err := os.ReadFile(path)
 	if err != nil {
@@ -31,5 +34,15 @@ func Load(path string) (Config, error) {
 	if err := json.Unmarshal(b, &cfg); err != nil {
 		return Config{}, err
 	}
+	applyEnvOverrides(&cfg)
 	return cfg, nil
+}
+
+func applyEnvOverrides(cfg *Config) {
+	if cfg == nil {
+		return
+	}
+	if strings.EqualFold(strings.TrimSpace(os.Getenv("ENV")), "DEVELOPMENT") {
+		cfg.ListenAddr = ":18081"
+	}
 }

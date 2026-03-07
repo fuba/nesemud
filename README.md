@@ -16,7 +16,8 @@ curl -sS http://127.0.0.1:18080/v1/state
 ```
 
 HLS URL:
-- `http://127.0.0.1:18080/hls/index.m3u8`
+- Production: `http://127.0.0.1:18080/hls/index.m3u8`
+- Development (`ENV=DEVELOPMENT`): `http://127.0.0.1:18081/hls/index.m3u8`
 
 Stop:
 ```bash

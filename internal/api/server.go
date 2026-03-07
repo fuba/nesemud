@@ -51,12 +51,15 @@ func (s *Server) Handler() http.Handler {
 
 func (s *Server) buildMux() http.Handler {
 	mux := http.NewServeMux()
+	mux.HandleFunc("/web", s.handleWeb)
+	mux.HandleFunc("/web/", s.handleWeb)
 	mux.HandleFunc("/v1/openapi.json", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(openAPISpec))
 	})
 	mux.HandleFunc("/v1/state", s.handleState)
 	mux.HandleFunc("/v1/rom/load", s.handleLoadROM)
+	mux.HandleFunc("/v1/rom/upload", s.handleUploadROM)
 	mux.HandleFunc("/v1/control/reset", s.handleReset)
 	mux.HandleFunc("/v1/control/pause", s.handlePause)
 	mux.HandleFunc("/v1/control/resume", s.handleResume)
@@ -95,6 +98,37 @@ func (s *Server) handleLoadROM(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := s.core.LoadROMFromFile(req.Path); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	w.WriteHeader(http.StatusAccepted)
+}
+
+func (s *Server) handleUploadROM(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if err := r.ParseMultipartForm(16 << 20); err != nil {
+		http.Error(w, "invalid multipart form", http.StatusBadRequest)
+		return
+	}
+	f, _, err := r.FormFile("rom")
+	if err != nil {
+		http.Error(w, "rom file is required", http.StatusBadRequest)
+		return
+	}
+	defer f.Close()
+	b, err := io.ReadAll(io.LimitReader(f, 16<<20))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if len(b) == 0 {
+		http.Error(w, "empty rom", http.StatusBadRequest)
+		return
+	}
+	if err := s.core.LoadROMContent(b); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
