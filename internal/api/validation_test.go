@@ -2,11 +2,10 @@ package api
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"path/filepath"
 	"testing"
 
 	"nesemud/internal/nes"
@@ -14,15 +13,13 @@ import (
 )
 
 func TestReplayValidationEndpoint(t *testing.T) {
-	dir := t.TempDir()
-	romPath := filepath.Join(dir, "test.nes")
-	if err := os.WriteFile(romPath, buildValidationROM(), 0o644); err != nil {
-		t.Fatalf("write rom: %v", err)
-	}
-
 	core := nes.NewConsole()
 	s := NewServer(core, nil)
-	body := map[string]any{"rom_path": romPath, "frames": 10, "repeats": 2}
+	body := map[string]any{
+		"rom_content_base64": base64.StdEncoding.EncodeToString(buildValidationROM()),
+		"frames":             10,
+		"repeats":            2,
+	}
 	b, _ := json.Marshal(body)
 
 	req := httptest.NewRequest(http.MethodPost, "/v1/validate/replay", bytes.NewReader(b))

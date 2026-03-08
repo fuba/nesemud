@@ -2,12 +2,14 @@ package api
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"strconv"
 	"strings"
+	"sync"
 
 	"nesemud/internal/nes"
 	"nesemud/internal/streaming"
@@ -25,7 +27,7 @@ type MemoryWriteRequest struct {
 }
 
 type ROMLoadRequest struct {
-	Path string `json:"path"`
+	ROMContentBase64 string `json:"rom_content_base64"`
 }
 
 type FM2LoadRequest struct {
@@ -34,9 +36,10 @@ type FM2LoadRequest struct {
 }
 
 type Server struct {
-	core   *nes.Console
-	hls    *streaming.HLSStreamer
-	router http.Handler
+	core         *nes.Console
+	hls          *streaming.HLSStreamer
+	router       http.Handler
+	validationMu sync.Mutex
 }
 
 func NewServer(core *nes.Console, hls *streaming.HLSStreamer) *Server {
@@ -93,11 +96,16 @@ func (s *Server) handleLoadROM(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	if req.Path == "" {
-		http.Error(w, "path is required", http.StatusBadRequest)
+	if strings.TrimSpace(req.ROMContentBase64) == "" {
+		http.Error(w, "rom_content_base64 is required", http.StatusBadRequest)
 		return
 	}
-	if err := s.core.LoadROMFromFile(req.Path); err != nil {
+	b, err := base64.StdEncoding.DecodeString(req.ROMContentBase64)
+	if err != nil {
+		http.Error(w, "invalid rom_content_base64", http.StatusBadRequest)
+		return
+	}
+	if err := s.core.LoadROMContent(b); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -172,29 +180,19 @@ func (s *Server) handleFM2(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	var content []byte
-	if req.Content != "" {
-		content = []byte(req.Content)
-	} else if req.Path != "" {
-		b, err := osReadFile(req.Path)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		content = b
-	} else {
-		http.Error(w, "path or content is required", http.StatusBadRequest)
+	if strings.TrimSpace(req.Path) != "" {
+		http.Error(w, "path input is disabled; use content", http.StatusBadRequest)
 		return
 	}
-	if err := s.core.LoadFM2Content(content); err != nil {
+	if strings.TrimSpace(req.Content) == "" {
+		http.Error(w, "content is required", http.StatusBadRequest)
+		return
+	}
+	if err := s.core.LoadFM2Content([]byte(req.Content)); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	w.WriteHeader(http.StatusAccepted)
-}
-
-var osReadFile = func(path string) ([]byte, error) {
-	return os.ReadFile(path)
 }
 
 func (s *Server) handleMemory(w http.ResponseWriter, r *http.Request) {
@@ -336,13 +334,22 @@ func (s *Server) handleReplayValidation(w http.ResponseWriter, r *http.Request) 
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	if !s.tryLockValidation() {
+		http.Error(w, "validation is busy", http.StatusTooManyRequests)
+		return
+	}
+	defer s.validationMu.Unlock()
 	var req validation.ReplayValidationRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	if req.ROMPath == "" {
-		http.Error(w, "rom_path is required", http.StatusBadRequest)
+	if strings.TrimSpace(req.ROMPath) != "" || strings.TrimSpace(req.FM2Path) != "" {
+		http.Error(w, "path input is disabled; use content fields", http.StatusBadRequest)
+		return
+	}
+	if strings.TrimSpace(req.ROMContentBase64) == "" {
+		http.Error(w, "rom_content_base64 is required", http.StatusBadRequest)
 		return
 	}
 	res, err := validation.RunReplayValidation(req)
@@ -358,13 +365,22 @@ func (s *Server) handleNESTestValidation(w http.ResponseWriter, r *http.Request)
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	if !s.tryLockValidation() {
+		http.Error(w, "validation is busy", http.StatusTooManyRequests)
+		return
+	}
+	defer s.validationMu.Unlock()
 	var req validation.NESTestRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	if req.ROMPath == "" || req.ExpectedLogPath == "" {
-		http.Error(w, "rom_path and expected_log_path are required", http.StatusBadRequest)
+	if strings.TrimSpace(req.ROMPath) != "" || strings.TrimSpace(req.ExpectedLogPath) != "" {
+		http.Error(w, "path input is disabled; use content fields", http.StatusBadRequest)
+		return
+	}
+	if strings.TrimSpace(req.ROMContentBase64) == "" || strings.TrimSpace(req.ExpectedLogContent) == "" {
+		http.Error(w, "rom_content_base64 and expected_log_content are required", http.StatusBadRequest)
 		return
 	}
 	res, err := validation.RunNESTest(req)
@@ -380,20 +396,41 @@ func (s *Server) handleSuiteValidation(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	if !s.tryLockValidation() {
+		http.Error(w, "validation is busy", http.StatusTooManyRequests)
+		return
+	}
+	defer s.validationMu.Unlock()
 	var req struct {
 		Suite  string `json:"suite"`
-		ROMDir string `json:"rom_dir"`
 		Frames int    `json:"frames"`
+		ROMs   []struct {
+			Name          string `json:"name"`
+			ContentBase64 string `json:"content_base64"`
+		} `json:"roms"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	if req.Suite == "" || req.ROMDir == "" {
-		http.Error(w, "suite and rom_dir are required", http.StatusBadRequest)
+	if strings.TrimSpace(req.Suite) == "" || len(req.ROMs) == 0 {
+		http.Error(w, "suite and roms are required", http.StatusBadRequest)
 		return
 	}
-	res, err := validation.RunSuiteByDir(req.Suite, req.ROMDir, req.Frames)
+	roms := make([]validation.ROMInput, 0, len(req.ROMs))
+	for i, r := range req.ROMs {
+		if strings.TrimSpace(r.Name) == "" || strings.TrimSpace(r.ContentBase64) == "" {
+			http.Error(w, fmt.Sprintf("roms[%d] name and content_base64 are required", i), http.StatusBadRequest)
+			return
+		}
+		b, err := base64.StdEncoding.DecodeString(r.ContentBase64)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("roms[%d] invalid content_base64", i), http.StatusBadRequest)
+			return
+		}
+		roms = append(roms, validation.ROMInput{Name: r.Name, Data: b})
+	}
+	res, err := validation.RunSuiteByROMInputs(req.Suite, roms, req.Frames)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -418,4 +455,8 @@ func jsonResponse(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(v)
+}
+
+func (s *Server) tryLockValidation() bool {
+	return s.validationMu.TryLock()
 }

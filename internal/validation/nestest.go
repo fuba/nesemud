@@ -2,6 +2,8 @@ package validation
 
 import (
 	"bufio"
+	"bytes"
+	"encoding/base64"
 	"fmt"
 	"os"
 	"regexp"
@@ -12,9 +14,11 @@ import (
 )
 
 type NESTestRequest struct {
-	ROMPath         string `json:"rom_path"`
-	ExpectedLogPath string `json:"expected_log_path"`
-	Instructions    int    `json:"instructions"`
+	ROMPath            string `json:"rom_path,omitempty"`
+	ExpectedLogPath    string `json:"expected_log_path,omitempty"`
+	ROMContentBase64   string `json:"rom_content_base64,omitempty"`
+	ExpectedLogContent string `json:"expected_log_content,omitempty"`
+	Instructions       int    `json:"instructions"`
 }
 
 type NESTestResult struct {
@@ -30,14 +34,40 @@ func RunNESTest(req NESTestRequest) (NESTestResult, error) {
 		req.Instructions = 5000
 	}
 	c := nes.NewConsole()
-	if err := c.LoadROMFromFile(req.ROMPath); err != nil {
-		return NESTestResult{}, err
+
+	if req.ROMContentBase64 != "" {
+		rom, err := base64.StdEncoding.DecodeString(req.ROMContentBase64)
+		if err != nil {
+			return NESTestResult{}, fmt.Errorf("invalid rom_content_base64: %w", err)
+		}
+		if err := c.LoadROMContent(rom); err != nil {
+			return NESTestResult{}, err
+		}
+	} else {
+		if req.ROMPath == "" {
+			return NESTestResult{}, fmt.Errorf("rom input is required")
+		}
+		if err := c.LoadROMFromFile(req.ROMPath); err != nil {
+			return NESTestResult{}, err
+		}
 	}
 
-	expected, err := readExpectedNESTest(req.ExpectedLogPath)
+	var (
+		expected []nes.CPUState
+		err      error
+	)
+	if req.ExpectedLogContent != "" {
+		expected, err = readExpectedNESTestFromBytes([]byte(req.ExpectedLogContent))
+	} else {
+		if req.ExpectedLogPath == "" {
+			return NESTestResult{}, fmt.Errorf("expected log input is required")
+		}
+		expected, err = readExpectedNESTest(req.ExpectedLogPath)
+	}
 	if err != nil {
 		return NESTestResult{}, err
 	}
+
 	limit := req.Instructions
 	if len(expected) < limit {
 		limit = len(expected)
@@ -72,9 +102,15 @@ func readExpectedNESTest(path string) ([]nes.CPUState, error) {
 		return nil, err
 	}
 	defer f.Close()
+	return parseNESTestScanner(bufio.NewScanner(f))
+}
 
+func readExpectedNESTestFromBytes(data []byte) ([]nes.CPUState, error) {
+	return parseNESTestScanner(bufio.NewScanner(bytes.NewReader(data)))
+}
+
+func parseNESTestScanner(s *bufio.Scanner) ([]nes.CPUState, error) {
 	var out []nes.CPUState
-	s := bufio.NewScanner(f)
 	for s.Scan() {
 		line := s.Text()
 		st, ok := parseNESTestLine(line)

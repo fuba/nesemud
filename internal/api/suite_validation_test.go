@@ -2,26 +2,28 @@ package api
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"path/filepath"
 	"testing"
 
 	"nesemud/internal/nes"
 )
 
 func TestSuiteValidationEndpoint(t *testing.T) {
-	d := t.TempDir()
-	romPath := filepath.Join(d, "ppu_case.nes")
-	if err := os.WriteFile(romPath, buildValidationROM(), 0o644); err != nil {
-		t.Fatalf("write rom: %v", err)
-	}
-
 	core := nes.NewConsole()
 	s := NewServer(core, nil)
-	body := map[string]any{"suite": "ppu", "rom_dir": d, "frames": 5}
+	body := map[string]any{
+		"suite":  "ppu",
+		"frames": 5,
+		"roms": []map[string]any{
+			{
+				"name":           "ppu_case.nes",
+				"content_base64": base64.StdEncoding.EncodeToString(buildValidationROM()),
+			},
+		},
+	}
 	b, _ := json.Marshal(body)
 	req := httptest.NewRequest(http.MethodPost, "/v1/validate/suite", bytes.NewReader(b))
 	rec := httptest.NewRecorder()

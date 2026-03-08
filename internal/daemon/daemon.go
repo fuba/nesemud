@@ -38,8 +38,12 @@ func New(cfgPath string, cfg config.Config, logger *log.Logger) *Service {
 		core:    core,
 		hls:     hls,
 		server: &http.Server{
-			Addr:    cfg.ListenAddr,
-			Handler: withHLSStatic(apiSrv.Handler(), cfg.HLSDir),
+			Addr:              cfg.ListenAddr,
+			Handler:           withHLSStatic(apiSrv.Handler(), cfg.HLSDir),
+			ReadHeaderTimeout: 5 * time.Second,
+			ReadTimeout:       15 * time.Second,
+			WriteTimeout:      30 * time.Second,
+			IdleTimeout:       60 * time.Second,
 		},
 	}
 }

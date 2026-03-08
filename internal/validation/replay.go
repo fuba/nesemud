@@ -2,18 +2,22 @@ package validation
 
 import (
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"os"
 
 	"nesemud/internal/nes"
 )
 
 type ReplayValidationRequest struct {
-	ROMPath string `json:"rom_path"`
-	FM2Path string `json:"fm2_path,omitempty"`
-	Frames  int    `json:"frames"`
-	Repeats int    `json:"repeats"`
+	ROMPath          string `json:"rom_path,omitempty"`
+	FM2Path          string `json:"fm2_path,omitempty"`
+	ROMContentBase64 string `json:"rom_content_base64,omitempty"`
+	FM2Content       string `json:"fm2_content,omitempty"`
+	Frames           int    `json:"frames"`
+	Repeats          int    `json:"repeats"`
 }
 
 type ReplayValidationResult struct {
@@ -49,10 +53,33 @@ func RunReplayValidation(req ReplayValidationRequest) (ReplayValidationResult, e
 
 func runOnce(req ReplayValidationRequest) (string, error) {
 	c := nes.NewConsole()
-	if err := c.LoadROMFromFile(req.ROMPath); err != nil {
+
+	var rom []byte
+	if req.ROMContentBase64 != "" {
+		var err error
+		rom, err = base64.StdEncoding.DecodeString(req.ROMContentBase64)
+		if err != nil {
+			return "", fmt.Errorf("invalid rom_content_base64: %w", err)
+		}
+	} else {
+		if req.ROMPath == "" {
+			return "", fmt.Errorf("rom input is required")
+		}
+		var err error
+		rom, err = os.ReadFile(req.ROMPath)
+		if err != nil {
+			return "", err
+		}
+	}
+	if err := c.LoadROMContent(rom); err != nil {
 		return "", err
 	}
-	if req.FM2Path != "" {
+
+	if req.FM2Content != "" {
+		if err := c.LoadFM2Content([]byte(req.FM2Content)); err != nil {
+			return "", err
+		}
+	} else if req.FM2Path != "" {
 		b, err := os.ReadFile(req.FM2Path)
 		if err != nil {
 			return "", err
@@ -73,4 +100,8 @@ func runOnce(req ReplayValidationRequest) (string, error) {
 		_, _ = h.Write(ab)
 	}
 	return hex.EncodeToString(h.Sum(nil)), nil
+}
+
+func encodeBase64(b []byte) string {
+	return base64.StdEncoding.EncodeToString(b)
 }
