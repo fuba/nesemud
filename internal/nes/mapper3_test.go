@@ -5,6 +5,7 @@ import "testing"
 func TestMapper3CHRBankSwitch(t *testing.T) {
 	c := NewConsole()
 	prg := make([]byte, 16*1024)
+	prg[0] = 0x01
 	prg[0x3FFC] = 0x00
 	prg[0x3FFD] = 0x80
 	chr := make([]byte, 2*8*1024)

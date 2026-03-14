@@ -20,6 +20,16 @@ func (c *Console) readCPU(addr uint16) byte {
 		return c.readControllerPort(1)
 	case addr == 0x4015:
 		return c.apu.ReadStatus()
+	case addr >= 0x5000 && addr <= 0x5FFF:
+		if c.cart == nil {
+			return 0
+		}
+		return c.cart.readRegister(addr)
+	case addr >= 0x6000 && addr < 0x8000:
+		if c.cart == nil {
+			return 0
+		}
+		return c.cart.readPRGRAM(addr)
 	case addr >= 0x8000:
 		if c.cart == nil {
 			return 0
@@ -35,7 +45,12 @@ func (c *Console) writeCPU(addr uint16, value byte) {
 	case addr < 0x2000:
 		c.ram[addr&0x07FF] = value
 	case addr < 0x4000:
-		c.ppu.cpuWriteRegister(c, 0x2000+(addr&0x0007), value)
+		reg := uint16(0x2000 + (addr & 0x0007))
+		if c.deferPPUWrites {
+			c.pendingPPUWrites = append(c.pendingPPUWrites, ppuRegisterWrite{addr: reg, value: value})
+			return
+		}
+		c.ppu.cpuWriteRegister(c, reg, value)
 	case addr == 0x4014:
 		base := uint16(value) << 8
 		for i := 0; i < 256; i++ {
@@ -45,7 +60,15 @@ func (c *Console) writeCPU(addr uint16, value byte) {
 		c.writeControllerStrobe(value)
 	case addr >= 0x4000 && addr <= 0x4017:
 		c.apu.WriteRegister(addr, value)
-	case addr >= 0x8000:
+	case addr >= 0x5000 && addr <= 0x5FFF:
+		if c.cart != nil {
+			c.cart.writeRegister(addr, value)
+		}
+	case addr >= 0x6000 && addr < 0x8000:
+		if c.cart != nil {
+			c.cart.writePRGRAM(addr, value)
+		}
+	case addr >= 0x6000:
 		if c.cart != nil {
 			c.cart.writePRG(addr, value)
 		}

@@ -35,3 +35,8 @@
 - `go test ./...` green.
 - Docker smoke test green.
 - Public test ROM fetch script added for reproducible validation runs.
+
+## Progress Update (2026-03-14)
+- Added iNES cartridge compatibility improvements for four-screen mirroring, PRG-RAM, trainer loading, and legacy dirty-header mapper decoding.
+- Added regression tests covering those cartridge compatibility paths.
+- Added MMC5 PRG banking fixes for banked PRG-RAM and correct 16KB window decoding.

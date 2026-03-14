@@ -24,19 +24,22 @@ type Service struct {
 	logger  *log.Logger
 	core    *nes.Console
 	hls     *streaming.HLSStreamer
+	webrtc  *streaming.WebRTCStreamer
 	server  *http.Server
 }
 
 func New(cfgPath string, cfg config.Config, logger *log.Logger) *Service {
 	core := nes.NewConsole()
 	hls := streaming.NewHLSStreamer()
-	apiSrv := api.NewServer(core, hls)
+	webrtc := streaming.NewWebRTCStreamer()
+	apiSrv := api.NewServer(core, hls, webrtc)
 	return &Service{
 		cfgPath: cfgPath,
 		cfg:     cfg,
 		logger:  logger,
 		core:    core,
 		hls:     hls,
+		webrtc:  webrtc,
 		server: &http.Server{
 			Addr:              cfg.ListenAddr,
 			Handler:           withHLSStatic(apiSrv.Handler(), cfg.HLSDir),
@@ -56,6 +59,10 @@ func (s *Service) Run(ctx context.Context) error {
 		return err
 	}
 	defer func() { _ = s.hls.Stop() }()
+	if err := s.webrtc.Start(ctx); err != nil {
+		return err
+	}
+	defer func() { _ = s.webrtc.Stop() }()
 
 	go s.frameLoop(ctx)
 	go s.watchReloadSignals(ctx)
@@ -94,6 +101,9 @@ func (s *Service) frameLoop(ctx context.Context) {
 			audio := s.core.SnapshotAudio()
 			if err := s.hls.WriteFrame(frame, audio); err != nil {
 				s.logger.Printf("hls write error: %v", err)
+			}
+			if err := s.webrtc.WriteFrame(frame, audio); err != nil {
+				s.logger.Printf("webrtc write error: %v", err)
 			}
 		}
 	}

@@ -34,3 +34,73 @@ func TestAPULengthCounterStopsPulse(t *testing.T) {
 		t.Fatalf("expected length to reach zero, got %d", a.pulse1.lengthCount)
 	}
 }
+
+func TestAPUFrameCounterFiveStepWriteAppliesAfterShortDelay(t *testing.T) {
+	a := newAPU()
+	a.pulse1.enabled = true
+	a.pulse1.lengthCount = 2
+
+	a.WriteRegister(0x4017, 0x80)
+	if a.pulse1.lengthCount != 2 {
+		t.Fatalf("expected no immediate half-frame clock on 4017 write")
+	}
+
+	a.StepCycles(1, nil)
+	if a.pulse1.lengthCount != 2 {
+		t.Fatalf("expected 4017 write to remain delayed for at least 1 cycle")
+	}
+	a.StepCycles(1, nil)
+	if a.pulse1.lengthCount >= 2 {
+		t.Fatalf("expected delayed 5-step write to clock half-frame within 2 cycles")
+	}
+}
+
+func TestAPUFrameCounterWriteDelayDependsOnCPUParity(t *testing.T) {
+	a := newAPU()
+	a.pulse1.enabled = true
+	a.pulse1.lengthCount = 2
+
+	a.cpuCycleParity = false
+	a.WriteRegister(0x4017, 0x80)
+	a.StepCycles(1, nil)
+	if a.pulse1.lengthCount != 2 {
+		t.Fatalf("expected 4017 write on even parity to stay pending for first cycle")
+	}
+	a.StepCycles(1, nil)
+	if a.pulse1.lengthCount >= 2 {
+		t.Fatalf("expected 4017 write on even parity to apply after 2 cycles")
+	}
+
+	a = newAPU()
+	a.pulse1.enabled = true
+	a.pulse1.lengthCount = 2
+	a.cpuCycleParity = true
+	a.WriteRegister(0x4017, 0x80)
+	a.StepCycles(2, nil)
+	if a.pulse1.lengthCount != 2 {
+		t.Fatalf("expected 4017 write on odd parity to stay pending for first 2 cycles")
+	}
+	a.StepCycles(1, nil)
+	if a.pulse1.lengthCount >= 2 {
+		t.Fatalf("expected 4017 write on odd parity to apply after 3 cycles")
+	}
+}
+
+func TestAPUFrameCounterWriteClearsIRQAndResetsLater(t *testing.T) {
+	a := newAPU()
+	a.frameIRQ = true
+	a.frameCounterCycle = 100
+
+	a.WriteRegister(0x4017, 0x40)
+	if a.frameIRQ {
+		t.Fatalf("expected 4017 write with IRQ inhibit to clear frame IRQ immediately")
+	}
+	if a.frameCounterCycle != 100 {
+		t.Fatalf("expected frame counter reset to be delayed")
+	}
+
+	a.StepCycles(3, nil)
+	if a.frameCounterCycle > 1 {
+		t.Fatalf("expected frame counter to reset within 3 cycles, got %d", a.frameCounterCycle)
+	}
+}

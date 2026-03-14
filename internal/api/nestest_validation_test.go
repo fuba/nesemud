@@ -16,7 +16,7 @@ func TestNESTestValidationEndpoint(t *testing.T) {
 	line += "8001  4C 00 80  JMP $8000                       A:00 X:00 Y:00 P:24 SP:FA\n"
 
 	core := nes.NewConsole()
-	s := NewServer(core, nil)
+	s := NewServer(core, nil, nil)
 	body := map[string]any{
 		"rom_content_base64":   base64.StdEncoding.EncodeToString(buildValidationROM()),
 		"expected_log_content": line,

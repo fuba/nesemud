@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 )
@@ -60,6 +61,9 @@ func (s *HLSStreamer) Start(ctx context.Context, outDir string) error {
 	if err := os.MkdirAll(outDir, 0o755); err != nil {
 		return err
 	}
+	if err := clearHLSOutputDir(outDir); err != nil {
+		return err
+	}
 
 	videoR, videoW, err := os.Pipe()
 	if err != nil {
@@ -100,7 +104,7 @@ func (s *HLSStreamer) Start(ctx context.Context, outDir string) error {
 		"-f", "hls",
 		"-hls_time", "1",
 		"-hls_list_size", "5",
-		"-hls_flags", "delete_segments+append_list+independent_segments",
+		"-hls_flags", "delete_segments+independent_segments",
 		playlist,
 	)
 	cmd.ExtraFiles = []*os.File{videoR, audioR}
@@ -273,6 +277,26 @@ func enqueueLatest(ch chan []byte, data []byte) int64 {
 	default:
 		return 1
 	}
+}
+
+func clearHLSOutputDir(outDir string) error {
+	entries, err := os.ReadDir(outDir)
+	if err != nil {
+		return err
+	}
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		if !strings.HasSuffix(name, ".ts") && !strings.HasSuffix(name, ".m3u8") {
+			continue
+		}
+		if err := os.Remove(filepath.Join(outDir, name)); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s *HLSStreamer) Stats() Stats {

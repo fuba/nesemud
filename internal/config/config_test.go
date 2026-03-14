@@ -45,3 +45,15 @@ func TestLoad_DevelopmentPortOverrideWithFile(t *testing.T) {
 		t.Fatalf("expected :18081 got %s", cfg.ListenAddr)
 	}
 }
+
+func TestLoad_ExplicitListenAddrOverrideWins(t *testing.T) {
+	t.Setenv("ENV", "DEVELOPMENT")
+	t.Setenv("NESD_LISTEN_ADDR", ":28081")
+	cfg, err := Load("")
+	if err != nil {
+		t.Fatalf("load failed: %v", err)
+	}
+	if cfg.ListenAddr != ":28081" {
+		t.Fatalf("expected :28081 got %s", cfg.ListenAddr)
+	}
+}

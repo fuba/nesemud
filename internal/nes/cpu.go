@@ -636,6 +636,36 @@ func (c *cpu6502) Step(bus cpuBus) error {
 		c.Cycles += 2
 	case 0x1A, 0x3A, 0x5A, 0x7A, 0xDA, 0xFA: // NOP (illegal, implied)
 		c.Cycles += 2
+	case 0x0B, 0x2B: // ANC #imm
+		c.A &= c.fetch8(bus)
+		c.updateNZ(c.A)
+		c.setFlag(flagC, c.A&0x80 != 0)
+		c.Cycles += 2
+	case 0x4B: // ALR #imm
+		c.A &= c.fetch8(bus)
+		c.setFlag(flagC, c.A&0x01 != 0)
+		c.A >>= 1
+		c.updateNZ(c.A)
+		c.Cycles += 2
+	case 0x6B: // ARR #imm
+		c.A &= c.fetch8(bus)
+		carryIn := byte(0)
+		if c.hasFlag(flagC) {
+			carryIn = 0x80
+		}
+		c.A = (c.A >> 1) | carryIn
+		c.updateNZ(c.A)
+		c.setFlag(flagC, c.A&0x40 != 0)
+		c.setFlag(flagV, ((c.A>>6)&1)^((c.A>>5)&1) != 0)
+		c.Cycles += 2
+	case 0xCB: // SBX #imm
+		v := c.fetch8(bus)
+		ax := c.A & c.X
+		res := uint16(ax) - uint16(v)
+		c.X = byte(res)
+		c.setFlag(flagC, ax >= v)
+		c.updateNZ(c.X)
+		c.Cycles += 2
 	case 0x80, 0x82, 0x89, 0xC2, 0xE2: // NOP #imm
 		_ = c.fetch8(bus)
 		c.Cycles += 2
@@ -702,6 +732,35 @@ func (c *cpu6502) Step(bus cpuBus) error {
 	case 0x83: // SAX (ind,x)
 		bus.write(c.addrINDX(bus), c.A&c.X)
 		c.Cycles += 6
+	case 0x93: // AHX (ind),y
+		addr, _ := c.addrINDY(bus)
+		bus.write(addr, c.illegalStoreHighValue(addr, c.A&c.X))
+		c.Cycles += 6
+	case 0x9B: // TAS abs,y
+		addr, _ := c.addrABSY(bus)
+		c.SP = c.A & c.X
+		bus.write(addr, c.illegalStoreHighValue(addr, c.SP))
+		c.Cycles += 5
+	case 0x9C: // SHY abs,x
+		addr, _ := c.addrABSX(bus)
+		bus.write(addr, c.illegalStoreHighValue(addr, c.Y))
+		c.Cycles += 5
+	case 0x9E: // SHX abs,y
+		addr, _ := c.addrABSY(bus)
+		bus.write(addr, c.illegalStoreHighValue(addr, c.X))
+		c.Cycles += 5
+	case 0x9F: // AHX abs,y
+		addr, _ := c.addrABSY(bus)
+		bus.write(addr, c.illegalStoreHighValue(addr, c.A&c.X))
+		c.Cycles += 5
+	case 0xBB: // LAS abs,y
+		addr, crossed := c.addrABSY(bus)
+		v := bus.read(addr) & c.SP
+		c.A = v
+		c.X = v
+		c.SP = v
+		c.updateNZ(v)
+		c.Cycles += 4 + boolToCycle(crossed)
 
 	case 0xC7, 0xD7, 0xCF, 0xDF, 0xDB, 0xC3, 0xD3: // DCP
 		addr, cycles := c.illegalAddr(bus, op)
@@ -793,6 +852,10 @@ func (c *cpu6502) illegalAddr(bus cpuBus, op byte) (uint16, uint64) {
 		addr, _ := c.addrINDY(bus)
 		return addr, 8
 	}
+}
+
+func (c *cpu6502) illegalStoreHighValue(addr uint16, value byte) byte {
+	return value & byte((addr>>8)+1)
 }
 
 func (c *cpu6502) NMI(bus cpuBus) {

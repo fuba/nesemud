@@ -18,3 +18,14 @@ func TestAPUMixProducesSilenceForZeroInput(t *testing.T) {
 		t.Fatalf("expected zero output, got %d", v)
 	}
 }
+
+func TestAPUOutputFilterAttenuatesDCOffset(t *testing.T) {
+	a := newAPU()
+	var last int16
+	for i := 0; i < 2000; i++ {
+		last = a.applyOutputFilter(12000)
+	}
+	if last >= 4000 {
+		t.Fatalf("expected output filter to attenuate sustained DC, got %d", last)
+	}
+}

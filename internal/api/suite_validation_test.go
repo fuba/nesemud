@@ -13,7 +13,7 @@ import (
 
 func TestSuiteValidationEndpoint(t *testing.T) {
 	core := nes.NewConsole()
-	s := NewServer(core, nil)
+	s := NewServer(core, nil, nil)
 	body := map[string]any{
 		"suite":  "ppu",
 		"frames": 5,
