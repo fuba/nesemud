@@ -164,26 +164,22 @@ func (s *HLSStreamer) Stop() error {
 
 func (s *HLSStreamer) WriteFrame(frame []byte, samples []int16) error {
 	s.mu.Lock()
-	ch := s.frameCh
-	s.mu.Unlock()
-	if ch == nil {
+	defer s.mu.Unlock()
+	if s.frameCh == nil {
 		return errors.New("hls streamer not running")
 	}
 	pkt := packet{
 		frame:   append([]byte(nil), frame...),
 		samples: append([]int16(nil), samples...),
 	}
+	// Hold the lock during send so Stop cannot close the channel concurrently.
 	select {
-	case ch <- pkt:
-		s.mu.Lock()
-		s.stats.QueueDepth = len(ch)
-		s.mu.Unlock()
+	case s.frameCh <- pkt:
+		s.stats.QueueDepth = len(s.frameCh)
 		return nil
 	default:
-		s.mu.Lock()
 		s.stats.DroppedFrames++
-		s.stats.QueueDepth = len(ch)
-		s.mu.Unlock()
+		s.stats.QueueDepth = len(s.frameCh)
 		return nil
 	}
 }

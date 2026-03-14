@@ -198,14 +198,12 @@ func (s *WebRTCStreamer) Stop() error {
 
 func (s *WebRTCStreamer) WriteFrame(frame []byte, samples []int16) error {
 	s.mu.Lock()
-	videoCh := s.videoCh
-	audioCh := s.audioCh
-	s.framesIn++
-	s.samplesIn += uint64(len(samples))
-	s.mu.Unlock()
-	if videoCh == nil || audioCh == nil {
+	defer s.mu.Unlock()
+	if s.videoCh == nil || s.audioCh == nil {
 		return errors.New("webrtc streamer not running")
 	}
+	s.framesIn++
+	s.samplesIn += uint64(len(samples))
 
 	videoPayload := append([]byte(nil), frame...)
 	audioPayload := make([]byte, len(samples)*2)
@@ -213,8 +211,9 @@ func (s *WebRTCStreamer) WriteFrame(frame []byte, samples []int16) error {
 		binary.LittleEndian.PutUint16(audioPayload[i*2:], uint16(smp))
 	}
 
-	enqueueLatestBytes(videoCh, videoPayload)
-	enqueueLatestBytes(audioCh, audioPayload)
+	// Hold the lock during sends so Stop cannot close channels concurrently.
+	enqueueLatestBytes(s.videoCh, videoPayload)
+	enqueueLatestBytes(s.audioCh, audioPayload)
 	return nil
 }
 
