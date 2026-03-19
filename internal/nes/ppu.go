@@ -118,6 +118,7 @@ func (p *ppu) cpuWriteRegister(c *Console, addr uint16, v byte) {
 	case 0x2000:
 		p.ctrl = v
 		p.tempAddr = (p.tempAddr &^ 0x0C00) | (uint16(v&0x03) << 10)
+		p.recordCurrentLineState(c, 8)
 		p.invalidateLineState()
 	case 0x2001:
 		p.mask = v
@@ -138,6 +139,7 @@ func (p *ppu) cpuWriteRegister(c *Console, addr uint16, v byte) {
 			p.tempAddr = (p.tempAddr &^ 0x73E0) | (uint16(v&0x07) << 12) | (uint16(v&0xF8) << 2)
 			p.addrLatch = false
 		}
+		p.recordCurrentLineState(c, 8)
 		p.invalidateLineState()
 	case 0x2006:
 		firstWrite := !p.addrLatch

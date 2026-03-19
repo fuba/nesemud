@@ -12,7 +12,7 @@ The codebase passes unit tests, but real ROM testing shows several compatibility
 - [x] 8x16 sprite rendering support.
 - [x] Sprite 0 hit status flag.
 - [x] Sprite overflow flag behavior.
-- [ ] Mid-frame scroll split correctness under real games.
+- [ ] Mid-frame scroll split correctness under real games (same-scanline `PPUCTRL`/`PPUSCROLL` split capture is now modeled; real-ROM audit still pending).
 - [x] Left-edge masking behavior for background and sprites.
 - [x] Palette grayscale/emphasis bits in `PPUMASK`.
 - [ ] More real-ROM validation for HUD/status-bar split rendering.
@@ -34,10 +34,10 @@ The codebase passes unit tests, but real ROM testing shows several compatibility
 - [ ] Validate mirroring and IRQ behavior against real-game scenarios, not only focused unit tests.
 
 ## 5. Validation / Tooling
-- [ ] Replace "determinism-only" suite checks with correctness-oriented compatibility checks.
+- [ ] Replace "determinism-only" suite checks with correctness-oriented compatibility checks (`nestest` and `blargg-cpu` improved; `ppu`/`apu`/`mapper` still pending).
 - [x] Add owned-ROM smoke coverage that boots every locally-owned ROM for a short run.
 - [x] Add longer real-ROM regression tests for `Gradius` and `Just Breed` that verify frame progression, non-uniform video, and APU register activity.
-- [ ] Add owned-ROM checklist with captured evidence for video and audio, not just boot smoke coverage.
+- [x] Add owned-ROM checklist with captured evidence for video and audio, not just boot smoke coverage (`owned-evidence` now supports `--checklist-out` markdown generation).
 - [ ] Keep `doc/master-checklist.md` aligned with actual implementation state.
 
 ## Current Priority Order

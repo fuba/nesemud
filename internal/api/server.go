@@ -420,8 +420,9 @@ func (s *Server) handleSuiteValidation(w http.ResponseWriter, r *http.Request) {
 		Suite  string `json:"suite"`
 		Frames int    `json:"frames"`
 		ROMs   []struct {
-			Name          string `json:"name"`
-			ContentBase64 string `json:"content_base64"`
+			Name               string `json:"name"`
+			ContentBase64      string `json:"content_base64"`
+			ExpectedLogContent string `json:"expected_log_content,omitempty"`
 		} `json:"roms"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -443,7 +444,11 @@ func (s *Server) handleSuiteValidation(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, fmt.Sprintf("roms[%d] invalid content_base64", i), http.StatusBadRequest)
 			return
 		}
-		roms = append(roms, validation.ROMInput{Name: r.Name, Data: b})
+		roms = append(roms, validation.ROMInput{
+			Name:               r.Name,
+			Data:               b,
+			ExpectedLogContent: r.ExpectedLogContent,
+		})
 	}
 	res, err := validation.RunSuiteByROMInputs(req.Suite, roms, req.Frames)
 	if err != nil {

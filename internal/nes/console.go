@@ -135,7 +135,9 @@ func (c *Console) StepFrame() {
 	}
 	c.frameCount++
 	if c.cart != nil {
-		copy(c.lastFrame, c.ppu.frameRGB)
+		// Rebuild final frame from captured per-scanline state so mid-frame splits are reflected.
+		c.ppu.renderFrame(c, c.lastFrame)
+		copy(c.ppu.frameRGB, c.lastFrame)
 	} else {
 		c.renderFallbackFrameLocked()
 	}
@@ -293,6 +295,18 @@ func (c *Console) SnapshotCPU() CPUState {
 		P:      c.cpu.P,
 		Cycles: c.cpu.Cycles,
 	}
+}
+
+func (c *Console) SetCPUState(st CPUState) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.cpu.PC = st.PC
+	c.cpu.A = st.A
+	c.cpu.X = st.X
+	c.cpu.Y = st.Y
+	c.cpu.SP = st.SP
+	c.cpu.P = st.P
+	c.cpu.Cycles = st.Cycles
 }
 
 func (c *Console) StepInstruction() error {

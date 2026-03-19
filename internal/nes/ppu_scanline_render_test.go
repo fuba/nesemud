@@ -281,6 +281,95 @@ func TestMidFramePPUWriteCreatesSameLineSplitState(t *testing.T) {
 	}
 }
 
+func TestMidFramePPUCTRLWriteCreatesSameLineSplitState(t *testing.T) {
+	c := NewConsole()
+	c.cart = &Cartridge{
+		Mapper:   0,
+		PRGBanks: 1,
+		CHRBanks: 1,
+		PRG:      make([]byte, 16*1024),
+		CHR:      make([]byte, 8*1024),
+	}
+
+	base := scanlineRenderState{
+		valid:     true,
+		ctrl:      0x00,
+		mask:      0x0A,
+		vramAddr:  0,
+		fineX:     0,
+		mirroring: MirroringHorizontal,
+		mapper:    0,
+	}
+	c.ppu.lineState[0] = base
+	c.ppu.lineSplitN[0] = 1
+	c.ppu.lineSplits[0][0] = scanlineStateSegment{startX: 0, state: base}
+
+	c.ppu.scanline = 0
+	c.ppu.cycle = 9
+	c.writeCPU(0x2000, 0x10)
+
+	if c.ppu.lineSplitN[0] < 2 {
+		t.Fatalf("expected same-line split segment after mid-frame PPUCTRL write")
+	}
+	startX := c.ppu.lineSplits[0][1].startX
+	if startX <= 0 || startX >= FrameWidth {
+		t.Fatalf("unexpected split startX=%d", startX)
+	}
+	before := c.ppu.renderStateForPixel(c, 0, startX-1)
+	after := c.ppu.renderStateForPixel(c, 0, startX)
+	if before.ctrl != 0x00 {
+		t.Fatalf("before split ctrl=0x%02X, want 0x00", before.ctrl)
+	}
+	if after.ctrl != 0x10 {
+		t.Fatalf("after split ctrl=0x%02X, want 0x10", after.ctrl)
+	}
+}
+
+func TestMidFramePPUSCROLLWriteCreatesSameLineSplitState(t *testing.T) {
+	c := NewConsole()
+	c.cart = &Cartridge{
+		Mapper:   0,
+		PRGBanks: 1,
+		CHRBanks: 1,
+		PRG:      make([]byte, 16*1024),
+		CHR:      make([]byte, 8*1024),
+	}
+
+	base := scanlineRenderState{
+		valid:     true,
+		ctrl:      0x00,
+		mask:      0x0A,
+		vramAddr:  0,
+		fineX:     0,
+		mirroring: MirroringHorizontal,
+		mapper:    0,
+	}
+	c.ppu.lineState[0] = base
+	c.ppu.lineSplitN[0] = 1
+	c.ppu.lineSplits[0][0] = scanlineStateSegment{startX: 0, state: base}
+
+	c.ppu.scanline = 0
+	c.ppu.cycle = 9
+	c.ppu.addrLatch = false
+	c.writeCPU(0x2005, 0x05)
+
+	if c.ppu.lineSplitN[0] < 2 {
+		t.Fatalf("expected same-line split segment after mid-frame PPUSCROLL write")
+	}
+	startX := c.ppu.lineSplits[0][1].startX
+	if startX <= 0 || startX >= FrameWidth {
+		t.Fatalf("unexpected split startX=%d", startX)
+	}
+	before := c.ppu.renderStateForPixel(c, 0, startX-1)
+	after := c.ppu.renderStateForPixel(c, 0, startX)
+	if before.fineX != 0 {
+		t.Fatalf("before split fineX=%d, want 0", before.fineX)
+	}
+	if after.fineX != 5 {
+		t.Fatalf("after split fineX=%d, want 5", after.fineX)
+	}
+}
+
 func TestRenderFrameUsesSameLineSegmentOrigin(t *testing.T) {
 	c := NewConsole()
 	c.cart = &Cartridge{

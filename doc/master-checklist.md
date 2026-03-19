@@ -49,7 +49,7 @@ For current implementation reality and known gaps, see `doc/implementation-gap-c
 - [ ] Extended mapper set (`5/23/25/33/66/75/87/88/206`) fully audited against owned ROMs
 
 ## 6. Compatibility Validation
-- [ ] nestest pass with expected CPU state log
+- [x] nestest pass with expected CPU state log
 - [ ] blargg cpu test ROM suite pass
 - [ ] ppu test ROM suite pass
 - [ ] apu test ROM suite pass

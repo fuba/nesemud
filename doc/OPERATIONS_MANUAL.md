@@ -179,8 +179,22 @@ Example:
 ```bash
 curl -sS -X POST http://127.0.0.1:18080/v1/validate/suite \
   -H 'Content-Type: application/json' \
-  -d '{"suite":"ppu","rom_dir":"/tests/roms","frames":3000}'
+  -d '{
+    "suite":"nestest",
+    "frames":5000,
+    "roms":[
+      {
+        "name":"nestest.nes",
+        "content_base64":"<BASE64_ROM>",
+        "expected_log_content":"<NESTEST_LOG_TEXT>"
+      }
+    ]
+  }'
 ```
+
+Notes:
+- `rom_dir` is not accepted by the API endpoint. Provide ROM bytes in `roms[].content_base64`.
+- For `suite: "nestest"`, `roms[].expected_log_content` is required.
 
 ### 6.9 Stream statistics
 - `GET /v1/stream/stats`
@@ -257,6 +271,7 @@ go run ./cmd/nes-validate --suite blargg-cpu --rom-dir ./tests/roms --frames 300
 go run ./cmd/nes-validate --suite ppu --rom-dir ./tests/roms --frames 3000
 go run ./cmd/nes-validate --suite apu --rom-dir ./tests/roms --frames 3000
 go run ./cmd/nes-validate --suite mapper --rom-dir ./tests/roms --frames 3000
+go run ./cmd/nes-validate --suite owned-evidence --rom-dir ./dont_upload_roms --frames 360 --markdown-out ./doc/owned-rom-evidence.md --checklist-out ./doc/owned-rom-checklist.md
 ```
 
 Batch run:

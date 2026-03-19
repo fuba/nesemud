@@ -67,6 +67,10 @@ func RunNESTest(req NESTestRequest) (NESTestResult, error) {
 	if err != nil {
 		return NESTestResult{}, err
 	}
+	// Align CPU registers to the first expected trace line.
+	// NESTest logs typically start from a fixed harness state (e.g. PC=$C000),
+	// which may differ from the ROM reset vector path.
+	c.SetCPUState(expected[0])
 
 	limit := req.Instructions
 	if len(expected) < limit {

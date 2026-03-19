@@ -40,3 +40,12 @@
 - Added iNES cartridge compatibility improvements for four-screen mirroring, PRG-RAM, trainer loading, and legacy dirty-header mapper decoding.
 - Added regression tests covering those cartridge compatibility paths.
 - Added MMC5 PRG banking fixes for banked PRG-RAM and correct 16KB window decoding.
+
+## Progress Update (2026-03-20)
+- Upgraded `nestest` suite validation to use expected CPU state logs (correctness-oriented).
+- Added `blargg-cpu` suite pass/fail probing via `$6000/$6004` status reporting.
+- Added `/v1/validate/suite` support for per-ROM `expected_log_content`.
+- Updated NESTest trace runner to align CPU initial state with the first expected log line, so `tests/roms/nestest.nes + nestest.log` passes.
+- Added mid-frame `PPUCTRL`/`PPUSCROLL` split-state capture for same-scanline rendering transitions.
+- Added `owned-evidence` validation mode to collect per-ROM video/audio/runtime evidence from owned ROM directories.
+- Added `owned-evidence` checklist markdown generation (`--checklist-out`) with prioritized action items.

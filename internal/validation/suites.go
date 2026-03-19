@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"nesemud/internal/nes"
 )
 
 type SuiteResult struct {
@@ -18,8 +20,9 @@ type SuiteResult struct {
 }
 
 type ROMInput struct {
-	Name string
-	Data []byte
+	Name               string
+	Data               []byte
+	ExpectedLogContent string
 }
 
 func RunSuiteByDir(suite string, romDir string, frames int) (SuiteResult, error) {
@@ -37,7 +40,17 @@ func RunSuiteByDir(suite string, romDir string, frames int) (SuiteResult, error)
 		if err != nil {
 			return SuiteResult{}, err
 		}
-		inputs = append(inputs, ROMInput{Name: rp, Data: b})
+		in := ROMInput{Name: rp, Data: b}
+		if strings.EqualFold(strings.TrimSpace(suite), "nestest") {
+			logContent, ok, err := loadAdjacentNESTestLog(rp)
+			if err != nil {
+				return SuiteResult{}, err
+			}
+			if ok {
+				in.ExpectedLogContent = logContent
+			}
+		}
+		inputs = append(inputs, in)
 	}
 	return RunSuiteByROMInputs(suite, inputs, frames)
 }
@@ -57,6 +70,32 @@ func RunSuiteByROMInputs(suite string, roms []ROMInput, frames int) (SuiteResult
 		return SuiteResult{}, fmt.Errorf("no roms found for suite %s", suite)
 	}
 	for _, r := range selected {
+		if strings.EqualFold(strings.TrimSpace(suite), "nestest") {
+			if strings.TrimSpace(r.ExpectedLogContent) == "" {
+				res.Failed++
+				res.Errors = append(res.Errors, fmt.Sprintf("%s: expected_log_content is required for nestest suite", r.Name))
+				continue
+			}
+			nres, err := RunNESTest(NESTestRequest{
+				ROMContentBase64:   encodeBase64(r.Data),
+				ExpectedLogContent: r.ExpectedLogContent,
+				Instructions:       frames,
+			})
+			if err != nil {
+				res.Failed++
+				res.Errors = append(res.Errors, fmt.Sprintf("%s: %v", r.Name, err))
+				continue
+			}
+			if nres.Matched {
+				res.Passed++
+			} else {
+				res.Failed++
+				for _, mm := range nres.Mismatches {
+					res.Errors = append(res.Errors, fmt.Sprintf("%s: %s", r.Name, mm))
+				}
+			}
+			continue
+		}
 		v, err := RunReplayValidation(ReplayValidationRequest{
 			ROMContentBase64: encodeBase64(r.Data),
 			Frames:           frames,
@@ -68,12 +107,32 @@ func RunSuiteByROMInputs(suite string, roms []ROMInput, frames int) (SuiteResult
 			continue
 		}
 		res.ROMHashes[r.Name] = v.Hashes[0]
-		if v.Deterministic {
-			res.Passed++
-		} else {
+		if !v.Deterministic {
 			res.Failed++
 			res.Errors = append(res.Errors, fmt.Sprintf("%s: non-deterministic", r.Name))
+			continue
 		}
+		if suiteUsesStatusProbe(suite) {
+			conclusive, ok, detail, err := runStatusProbe(r.Data, frames)
+			if err != nil {
+				res.Failed++
+				res.Errors = append(res.Errors, fmt.Sprintf("%s: %v", r.Name, err))
+				continue
+			}
+			if !conclusive && strings.EqualFold(strings.TrimSpace(suite), "blargg-cpu") {
+				res.Failed++
+				res.Errors = append(res.Errors, fmt.Sprintf("%s: no status message at $6004", r.Name))
+				continue
+			}
+			if !ok {
+				if conclusive {
+					res.Failed++
+					res.Errors = append(res.Errors, fmt.Sprintf("%s: %s", r.Name, detail))
+					continue
+				}
+			}
+		}
+		res.Passed++
 	}
 	return res, nil
 }
@@ -82,7 +141,7 @@ func suitePatterns(suite string) ([]string, error) {
 	s := strings.ToLower(strings.TrimSpace(suite))
 	switch s {
 	case "nestest":
-		return []string{"nestest", "cpu"}, nil
+		return []string{"nestest"}, nil
 	case "blargg-cpu":
 		return []string{"blargg", "cpu"}, nil
 	case "ppu":
@@ -94,6 +153,77 @@ func suitePatterns(suite string) ([]string, error) {
 	default:
 		return nil, errors.New("unknown suite")
 	}
+}
+
+func loadAdjacentNESTestLog(romPath string) (string, bool, error) {
+	base := strings.TrimSuffix(romPath, filepath.Ext(romPath))
+	candidates := []string{
+		base + ".log",
+		filepath.Join(filepath.Dir(romPath), "nestest.log"),
+	}
+	for _, p := range candidates {
+		b, err := os.ReadFile(p)
+		if err == nil {
+			return string(b), true, nil
+		}
+		if !errors.Is(err, os.ErrNotExist) {
+			return "", false, err
+		}
+	}
+	return "", false, nil
+}
+
+func suiteUsesStatusProbe(suite string) bool {
+	switch strings.ToLower(strings.TrimSpace(suite)) {
+	case "blargg-cpu", "ppu", "apu", "mapper":
+		return true
+	default:
+		return false
+	}
+}
+
+func runStatusProbe(rom []byte, frames int) (bool, bool, string, error) {
+	if frames <= 0 {
+		frames = 1200
+	}
+	c := nes.NewConsole()
+	if err := c.LoadROMContent(rom); err != nil {
+		return false, false, "", err
+	}
+	for i := 0; i < frames; i++ {
+		c.StepFrame()
+	}
+	sb, err := c.Peek(0x6000, 1)
+	if err != nil {
+		return false, false, "", err
+	}
+	mb, err := c.Peek(0x6004, 256)
+	if err != nil {
+		return false, false, "", err
+	}
+	msg := decodeASCIIZ(mb)
+	if msg == "" {
+		return false, false, "", nil
+	}
+	lower := strings.ToLower(msg)
+	if sb[0] == 0x00 && strings.Contains(lower, "pass") {
+		return true, true, msg, nil
+	}
+	return true, false, fmt.Sprintf("status=0x%02X message=%q", sb[0], msg), nil
+}
+
+func decodeASCIIZ(b []byte) string {
+	out := make([]byte, 0, len(b))
+	for _, ch := range b {
+		if ch == 0 {
+			break
+		}
+		if ch < 0x20 || ch > 0x7E {
+			break
+		}
+		out = append(out, ch)
+	}
+	return strings.TrimSpace(string(out))
 }
 
 func filterROMInputs(roms []ROMInput, patterns []string) []ROMInput {
