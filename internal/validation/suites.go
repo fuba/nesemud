@@ -113,7 +113,7 @@ func RunSuiteByROMInputs(suite string, roms []ROMInput, frames int) (SuiteResult
 			continue
 		}
 		if suiteUsesStatusProbe(suite) {
-			conclusive, ok, detail, err := runStatusProbe(r.Data, frames)
+			conclusive, ok, detail, err := runStatusProbe(r.Data, frames, suite)
 			if err != nil {
 				res.Failed++
 				res.Errors = append(res.Errors, fmt.Sprintf("%s: %v", r.Name, err))
@@ -121,7 +121,11 @@ func RunSuiteByROMInputs(suite string, roms []ROMInput, frames int) (SuiteResult
 			}
 			if !conclusive && strings.EqualFold(strings.TrimSpace(suite), "blargg-cpu") {
 				res.Failed++
-				res.Errors = append(res.Errors, fmt.Sprintf("%s: no status message at $6004", r.Name))
+				if strings.TrimSpace(detail) == "" {
+					res.Errors = append(res.Errors, fmt.Sprintf("%s: no status message at $6004", r.Name))
+				} else {
+					res.Errors = append(res.Errors, fmt.Sprintf("%s: %s", r.Name, detail))
+				}
 				continue
 			}
 			if !ok {
@@ -182,7 +186,7 @@ func suiteUsesStatusProbe(suite string) bool {
 	}
 }
 
-func runStatusProbe(rom []byte, frames int) (bool, bool, string, error) {
+func runStatusProbe(rom []byte, frames int, suite string) (bool, bool, string, error) {
 	if frames <= 0 {
 		frames = 1200
 	}
@@ -190,37 +194,89 @@ func runStatusProbe(rom []byte, frames int) (bool, bool, string, error) {
 	if err := c.LoadROMContent(rom); err != nil {
 		return false, false, "", err
 	}
+	strictBlargg := strings.EqualFold(strings.TrimSpace(suite), "blargg-cpu")
+	blarggSeen := false
+	resetIssued := 0
 	for i := 0; i < frames; i++ {
 		c.StepFrame()
+		status, msg, blarggSig, err := readStatusProbe(c)
+		if err != nil {
+			return false, false, "", err
+		}
+		if strictBlargg && blarggSig {
+			blarggSeen = true
+			switch status {
+			case 0x00:
+				if msg == "" {
+					msg = "status=0x00"
+				}
+				return true, true, msg, nil
+			case 0x80:
+				continue
+			case 0x81:
+				// blargg protocol: 0x81 requests a reset to continue execution.
+				if resetIssued < 2 {
+					c.Reset()
+					resetIssued++
+					continue
+				}
+				return true, false, "status=0x81 (reset requested repeatedly)", nil
+			default:
+				if status < 0x80 {
+					return true, false, fmt.Sprintf("status=0x%02X message=%q", status, msg), nil
+				}
+			}
+		}
 	}
-	sb, err := c.Peek(0x6000, 1)
+	status, msg, blarggSig, err := readStatusProbe(c)
 	if err != nil {
 		return false, false, "", err
 	}
-	mb, err := c.Peek(0x6004, 256)
-	if err != nil {
-		return false, false, "", err
+	if strictBlargg {
+		if blarggSeen || blarggSig {
+			return true, false, fmt.Sprintf("status=0x%02X message=%q (not completed within %d frames)", status, msg, frames), nil
+		}
+		if status != 0 || msg != "" {
+			return false, false, fmt.Sprintf("blargg signature not found (status=0x%02X message=%q)", status, msg), nil
+		}
 	}
-	msg := decodeASCIIZ(mb)
 	if msg == "" {
 		return false, false, "", nil
 	}
 	lower := strings.ToLower(msg)
-	if sb[0] == 0x00 && strings.Contains(lower, "pass") {
+	if status == 0x00 && strings.Contains(lower, "pass") {
 		return true, true, msg, nil
 	}
-	return true, false, fmt.Sprintf("status=0x%02X message=%q", sb[0], msg), nil
+	return true, false, fmt.Sprintf("status=0x%02X message=%q", status, msg), nil
+}
+
+func readStatusProbe(c *nes.Console) (byte, string, bool, error) {
+	sb, err := c.Peek(0x6000, 4)
+	if err != nil {
+		return 0, "", false, err
+	}
+	mb, err := c.Peek(0x6004, 256)
+	if err != nil {
+		return 0, "", false, err
+	}
+	sig := len(sb) >= 4 && sb[1] == 0xDE && sb[2] == 0xB0 && sb[3] == 0x61
+	return sb[0], decodeASCIIZ(mb), sig, nil
 }
 
 func decodeASCIIZ(b []byte) string {
 	out := make([]byte, 0, len(b))
+	started := false
 	for _, ch := range b {
 		if ch == 0 {
 			break
 		}
 		if ch < 0x20 || ch > 0x7E {
+			if !started {
+				continue
+			}
 			break
 		}
+		started = true
 		out = append(out, ch)
 	}
 	return strings.TrimSpace(string(out))

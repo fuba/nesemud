@@ -113,6 +113,21 @@ func TestRunSuiteByROMInputsBlarggCPUUsesStatusMessageFail(t *testing.T) {
 	}
 }
 
+func TestRunSuiteByROMInputsBlarggCPUSignatureStatusPassWithoutMessage(t *testing.T) {
+	res, err := RunSuiteByROMInputs("blargg-cpu", []ROMInput{
+		{
+			Name: "blargg_cpu_test.nes",
+			Data: buildStatusMessageROM(0x00, ""),
+		},
+	}, 2)
+	if err != nil {
+		t.Fatalf("RunSuiteByROMInputs: %v", err)
+	}
+	if res.Passed != 1 || res.Failed != 0 {
+		t.Fatalf("expected blargg-cpu pass from signature status, got passed=%d failed=%d errors=%v", res.Passed, res.Failed, res.Errors)
+	}
+}
+
 func TestRunSuiteByROMInputsPPUSuitePrefersStatusProbeWhenAvailable(t *testing.T) {
 	res, err := RunSuiteByROMInputs("ppu", []ROMInput{
 		{
@@ -143,6 +158,13 @@ func TestRunSuiteByROMInputsPPUSuiteFallsBackWithoutStatusProbe(t *testing.T) {
 	}
 }
 
+func TestDecodeASCIIZSkipsLeadingControlBytes(t *testing.T) {
+	got := decodeASCIIZ([]byte{'\n', '\r', 'P', 'a', 's', 's', 0x00})
+	if got != "Pass" {
+		t.Fatalf("decodeASCIIZ=%q, want %q", got, "Pass")
+	}
+}
+
 func buildStatusMessageROM(status byte, msg string) []byte {
 	header := []byte{'N', 'E', 'S', 0x1A, 1, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0}
 	prg := make([]byte, 16*1024)
@@ -151,6 +173,24 @@ func buildStatusMessageROM(status byte, msg string) []byte {
 		prg[pc] = v
 		pc++
 	}
+	// LDA #$DE ; STA $6001
+	put(0xA9)
+	put(0xDE)
+	put(0x8D)
+	put(0x01)
+	put(0x60)
+	// LDA #$B0 ; STA $6002
+	put(0xA9)
+	put(0xB0)
+	put(0x8D)
+	put(0x02)
+	put(0x60)
+	// LDA #$61 ; STA $6003
+	put(0xA9)
+	put(0x61)
+	put(0x8D)
+	put(0x03)
+	put(0x60)
 	// LDA #status ; STA $6000
 	put(0xA9)
 	put(status)
