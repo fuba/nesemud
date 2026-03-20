@@ -52,3 +52,4 @@
 - Refined `blargg-cpu` suite probing to support status protocol variants while keeping deterministic fallback for ROMs that do not expose `$6000/$6004`.
 - Added health-probe fallback checks for `ppu`/`apu`/`mapper` suites when status protocol is unavailable.
 - Improved `owned-evidence` scoring by tracking intermediate non-uniform frame observation.
+- Added adaptive extension in `owned-evidence` (uniform runs get additional frames) plus mapper hotspot reporting for triage.

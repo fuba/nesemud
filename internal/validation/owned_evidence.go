@@ -12,11 +12,14 @@ import (
 
 type OwnedROMEvidence struct {
 	Name                 string `json:"name"`
+	Mapper               uint8  `json:"mapper"`
 	FrameCount           uint64 `json:"frame_count"`
 	Paused               bool   `json:"paused"`
 	UniformFrame         bool   `json:"uniform_frame"`
 	NonUniformObserved   bool   `json:"non_uniform_observed"`
 	FirstNonUniformFrame int    `json:"first_non_uniform_frame,omitempty"`
+	ExtendedRun          bool   `json:"extended_run,omitempty"`
+	ExtraFrames          int    `json:"extra_frames,omitempty"`
 	AudioActiveSamples   int    `json:"audio_active_samples"`
 	AudioPeakAbs         int    `json:"audio_peak_abs"`
 	APUWrite4015         uint64 `json:"apu_write_4015"`
@@ -55,12 +58,15 @@ func CollectOwnedROMEvidence(romDir string, frames int) (OwnedROMEvidenceReport,
 	}
 	for _, name := range romNames {
 		path := filepath.Join(romDir, name)
-		ev := OwnedROMEvidence{Name: name, FirstNonUniformFrame: -1}
+		ev := OwnedROMEvidence{Name: name}
 		data, err := os.ReadFile(path)
 		if err != nil {
 			ev.Error = fmt.Sprintf("read rom: %v", err)
 			report.Results = append(report.Results, ev)
 			continue
+		}
+		if cart, err := nes.LoadINES(data); err == nil {
+			ev.Mapper = cart.Mapper
 		}
 		c := nes.NewConsole()
 		if err := c.LoadROMContent(data); err != nil {
@@ -69,16 +75,15 @@ func CollectOwnedROMEvidence(romDir string, frames int) (OwnedROMEvidenceReport,
 			continue
 		}
 		const frameProbeInterval = 15
-		for i := 0; i < frames; i++ {
-			c.StepFrame()
-			if ev.NonUniformObserved {
-				continue
-			}
-			if i%frameProbeInterval == 0 || i == frames-1 {
-				if !isUniformFrame(c.SnapshotFrame()) {
-					ev.NonUniformObserved = true
-					ev.FirstNonUniformFrame = i + 1
-				}
+		runEvidenceFrames(c, &ev, frames, frameProbeInterval)
+		if frames >= 60 {
+			st := c.State()
+			paused, _ := st["paused"].(bool)
+			if !paused && !ev.NonUniformObserved {
+				extra := max(frames, 180)
+				runEvidenceFrames(c, &ev, extra, frameProbeInterval)
+				ev.ExtendedRun = true
+				ev.ExtraFrames = extra
 			}
 		}
 
@@ -93,7 +98,7 @@ func CollectOwnedROMEvidence(romDir string, frames int) (OwnedROMEvidenceReport,
 		ev.UniformFrame = isUniformFrame(frame)
 		if !ev.NonUniformObserved && !ev.UniformFrame {
 			ev.NonUniformObserved = true
-			ev.FirstNonUniformFrame = frames
+			ev.FirstNonUniformFrame = int(ev.FrameCount)
 		}
 		if audio, ok := st["audio"].(map[string]any); ok {
 			if v, ok := audio["active_samples"].(int); ok {
@@ -115,6 +120,27 @@ func CollectOwnedROMEvidence(romDir string, frames int) (OwnedROMEvidenceReport,
 	}
 
 	return report, nil
+}
+
+func runEvidenceFrames(c *nes.Console, ev *OwnedROMEvidence, frames int, probeInterval int) {
+	if frames <= 0 {
+		return
+	}
+	for i := 0; i < frames; i++ {
+		c.StepFrame()
+		if ev.NonUniformObserved {
+			continue
+		}
+		if i%probeInterval == 0 || i == frames-1 {
+			if !isUniformFrame(c.SnapshotFrame()) {
+				ev.NonUniformObserved = true
+				st := c.State()
+				if fc, ok := st["frame_count"].(uint64); ok {
+					ev.FirstNonUniformFrame = int(fc)
+				}
+			}
+		}
+	}
 }
 
 func isUniformFrame(frame []byte) bool {

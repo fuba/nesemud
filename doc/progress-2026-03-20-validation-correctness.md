@@ -19,6 +19,8 @@
 - Improved owned-ROM evidence quality by sampling intermediate frames:
   - records whether any non-uniform frame was observed
   - warns only when output remains uniform for the full run
+  - extends runtime for uniform-only ROMs (`+180` frames) before final warning
+  - includes mapper IDs and hotspot summary in checklist output
 
 ## Validation
 - Added/updated tests in:
@@ -31,3 +33,4 @@
 ## Remaining Gaps
 - `ppu`, `apu`, and `mapper` suite modes now have health-probe fallback, but still need stronger reference-oracle coverage beyond these heuristics.
 - Real-ROM evidence collection exists, but WARN-heavy ROM clusters still require subsystem-level triage and fixes.
+  - Current `owned-evidence` snapshot (`frames=60`) improved from 31 to 21 action items after extended probing.

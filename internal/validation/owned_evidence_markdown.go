@@ -20,18 +20,25 @@ func FormatOwnedROMEvidenceMarkdown(report OwnedROMEvidenceReport) string {
 	b.WriteString(fmt.Sprintf("- Healthy runs: %d\n", okCount))
 	b.WriteString(fmt.Sprintf("- Needs review: %d\n\n", len(report.Results)-okCount))
 
-	b.WriteString("| ROM | Result | Frames | Paused | Uniform Frame | Non-Uniform Seen | First Non-Uniform Frame | Audio Active | Audio Peak | APU 4015 | APU 4017 | Notes |\n")
-	b.WriteString("| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |\n")
+	b.WriteString("| ROM | Mapper | Result | Frames | Extended | Extra Frames | Paused | Uniform Frame | Non-Uniform Seen | First Non-Uniform Frame | Audio Active | Audio Peak | APU 4015 | APU 4017 | Notes |\n")
+	b.WriteString("| --- | ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |\n")
 	for _, r := range report.Results {
 		result, notes := ownedEvidenceStatus(r), ownedEvidenceNotes(r)
 		firstNonUniform := "-"
 		if r.NonUniformObserved && r.FirstNonUniformFrame > 0 {
 			firstNonUniform = fmt.Sprintf("%d", r.FirstNonUniformFrame)
 		}
-		b.WriteString(fmt.Sprintf("| %s | %s | %d | %t | %t | %t | %s | %d | %d | %d | %d | %s |\n",
+		extraFrames := "-"
+		if r.ExtraFrames > 0 {
+			extraFrames = fmt.Sprintf("%d", r.ExtraFrames)
+		}
+		b.WriteString(fmt.Sprintf("| %s | %d | %s | %d | %t | %s | %t | %t | %t | %s | %d | %d | %d | %d | %s |\n",
 			r.Name,
+			r.Mapper,
 			result,
 			r.FrameCount,
+			r.ExtendedRun,
+			extraFrames,
 			r.Paused,
 			r.UniformFrame,
 			r.NonUniformObserved,
@@ -68,6 +75,9 @@ func ownedEvidenceNotes(r OwnedROMEvidence) string {
 		return "paused during run"
 	}
 	if ownedEvidenceUniformStuck(r) {
+		if r.Mapper != 0 {
+			return fmt.Sprintf("uniform frame output (mapper %d)", r.Mapper)
+		}
 		return "uniform frame output"
 	}
 	return ""
@@ -81,6 +91,7 @@ func sanitizeMarkdownCell(v string) string {
 
 type ownedEvidenceChecklistItem struct {
 	Name     string
+	Mapper   uint8
 	Severity string
 	Owner    string
 	Reason   string
@@ -88,11 +99,22 @@ type ownedEvidenceChecklistItem struct {
 
 func FormatOwnedROMEvidenceChecklistMarkdown(report OwnedROMEvidenceReport) string {
 	items := buildOwnedEvidenceChecklistItems(report)
+	hotspots := ownedEvidenceHotspots(items)
 	var b strings.Builder
 	b.WriteString("# Owned ROM Evidence Checklist\n\n")
 	b.WriteString(fmt.Sprintf("- ROM count: %d\n", report.ROMCount))
 	b.WriteString(fmt.Sprintf("- Action items: %d\n", len(items)))
 	b.WriteString(fmt.Sprintf("- Healthy runs: %d\n\n", report.ROMCount-len(items)))
+
+	if len(hotspots) > 0 {
+		b.WriteString("## Hotspots\n\n")
+		b.WriteString("| Mapper | Count |\n")
+		b.WriteString("| ---: | ---: |\n")
+		for _, hs := range hotspots {
+			b.WriteString(fmt.Sprintf("| %d | %d |\n", hs.Mapper, hs.Count))
+		}
+		b.WriteString("\n")
+	}
 
 	b.WriteString("## Priority Backlog\n\n")
 	if len(items) == 0 {
@@ -119,6 +141,7 @@ func buildOwnedEvidenceChecklistItems(report OwnedROMEvidenceReport) []ownedEvid
 		}
 		items = append(items, ownedEvidenceChecklistItem{
 			Name:     r.Name,
+			Mapper:   r.Mapper,
 			Severity: ownedEvidenceStatus(r),
 			Owner:    ownedEvidenceOwner(r),
 			Reason:   ownedEvidenceNotes(r),
@@ -133,6 +156,29 @@ func buildOwnedEvidenceChecklistItems(report OwnedROMEvidenceReport) []ownedEvid
 		return strings.ToLower(items[i].Name) < strings.ToLower(items[j].Name)
 	})
 	return items
+}
+
+type ownedEvidenceHotspot struct {
+	Mapper uint8
+	Count  int
+}
+
+func ownedEvidenceHotspots(items []ownedEvidenceChecklistItem) []ownedEvidenceHotspot {
+	counts := map[uint8]int{}
+	for _, item := range items {
+		counts[item.Mapper]++
+	}
+	out := make([]ownedEvidenceHotspot, 0, len(counts))
+	for mapper, count := range counts {
+		out = append(out, ownedEvidenceHotspot{Mapper: mapper, Count: count})
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Count != out[j].Count {
+			return out[i].Count > out[j].Count
+		}
+		return out[i].Mapper < out[j].Mapper
+	})
+	return out
 }
 
 func ownedEvidenceSeverityRank(severity string) int {
