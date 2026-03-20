@@ -177,6 +177,7 @@ type Console struct {
 	replay           *Replay
 	replayCursor     int
 	lastFrameTime    time.Time
+	lastCPUError     string
 }
 
 type CPUState struct {

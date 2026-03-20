@@ -56,6 +56,7 @@ func (c *Console) resetLocked() {
 	c.cpu.Reset(c)
 	c.ppu.Reset()
 	c.apu.Reset()
+	c.lastCPUError = ""
 	c.lastFrameTime = time.Now()
 	c.renderFallbackFrameLocked()
 }
@@ -126,6 +127,7 @@ func (c *Console) StepFrame() {
 		c.beginDeferredPPUWritesLocked()
 		if err := c.cpu.Step(c); err != nil {
 			c.endDeferredPPUWritesLocked()
+			c.lastCPUError = err.Error()
 			c.paused = true
 			break
 		}
@@ -169,11 +171,12 @@ func (c *Console) State() map[string]any {
 	defer c.mu.RUnlock()
 	audioPeak, audioRMS, audioActive := summarizeAudio(c.audioSamples)
 	return map[string]any{
-		"paused":        c.paused,
-		"frame_count":   c.frameCount,
-		"rom_loaded":    c.cart != nil,
-		"replay_active": c.replay != nil && c.replayCursor < len(c.replay.Frames),
-		"replay_cursor": c.replayCursor,
+		"paused":         c.paused,
+		"last_cpu_error": c.lastCPUError,
+		"frame_count":    c.frameCount,
+		"rom_loaded":     c.cart != nil,
+		"replay_active":  c.replay != nil && c.replayCursor < len(c.replay.Frames),
+		"replay_cursor":  c.replayCursor,
 		"cpu": map[string]any{
 			"pc":     c.cpu.PC,
 			"a":      c.cpu.A,
@@ -319,6 +322,7 @@ func (c *Console) StepInstruction() error {
 	c.beginDeferredPPUWritesLocked()
 	if err := c.cpu.Step(c); err != nil {
 		c.endDeferredPPUWritesLocked()
+		c.lastCPUError = err.Error()
 		c.paused = true
 		return err
 	}

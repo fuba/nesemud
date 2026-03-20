@@ -15,12 +15,16 @@ type OwnedROMEvidence struct {
 	Mapper               uint8  `json:"mapper"`
 	FrameCount           uint64 `json:"frame_count"`
 	Paused               bool   `json:"paused"`
+	PauseReason          string `json:"pause_reason,omitempty"`
+	PausePC              uint16 `json:"pause_pc,omitempty"`
+	PauseOpcode          byte   `json:"pause_opcode,omitempty"`
 	UniformFrame         bool   `json:"uniform_frame"`
 	NonUniformObserved   bool   `json:"non_uniform_observed"`
 	FirstNonUniformFrame int    `json:"first_non_uniform_frame,omitempty"`
 	UniformColorChanges  int    `json:"uniform_color_changes,omitempty"`
 	ExtendedRun          bool   `json:"extended_run,omitempty"`
 	ExtraFrames          int    `json:"extra_frames,omitempty"`
+	AutoStartPulses      int    `json:"auto_start_pulses,omitempty"`
 	AudioActiveSamples   int    `json:"audio_active_samples"`
 	AudioPeakAbs         int    `json:"audio_peak_abs"`
 	APUWrite4015         uint64 `json:"apu_write_4015"`
@@ -77,13 +81,13 @@ func CollectOwnedROMEvidence(romDir string, frames int) (OwnedROMEvidenceReport,
 		}
 		const frameProbeInterval = 15
 		var probe evidenceProbeState
-		runEvidenceFrames(c, &ev, frames, frameProbeInterval, &probe)
+		runEvidenceFrames(c, &ev, frames, frameProbeInterval, &probe, 0, 0)
 		if frames >= 60 {
 			st := c.State()
 			paused, _ := st["paused"].(bool)
 			if !paused && !ev.NonUniformObserved {
 				extra := max(frames, 180)
-				runEvidenceFrames(c, &ev, extra, frameProbeInterval, &probe)
+				runEvidenceFrames(c, &ev, extra, frameProbeInterval, &probe, 0, 0)
 				ev.ExtendedRun = true
 				ev.ExtraFrames = extra
 			}
@@ -95,6 +99,16 @@ func CollectOwnedROMEvidence(romDir string, frames int) (OwnedROMEvidenceReport,
 		}
 		if paused, ok := st["paused"].(bool); ok {
 			ev.Paused = paused
+		}
+		if reason, ok := st["last_cpu_error"].(string); ok {
+			ev.PauseReason = strings.TrimSpace(reason)
+		}
+		if ev.Paused {
+			cpu := c.SnapshotCPU()
+			ev.PausePC = cpu.PC
+			if b, err := c.Peek(cpu.PC, 1); err == nil && len(b) == 1 {
+				ev.PauseOpcode = b[0]
+			}
 		}
 		frame := c.SnapshotFrame()
 		ev.UniformFrame = isUniformFrame(frame)
@@ -129,11 +143,29 @@ type evidenceProbeState struct {
 	uniformColor     uint32
 }
 
-func runEvidenceFrames(c *nes.Console, ev *OwnedROMEvidence, frames int, probeInterval int, probe *evidenceProbeState) {
+func runEvidenceFrames(c *nes.Console, ev *OwnedROMEvidence, frames int, probeInterval int, probe *evidenceProbeState, autoStartEvery int, autoStartLen int) {
 	if frames <= 0 {
 		return
 	}
+	setStart := func(on bool) {
+		if on {
+			c.SetController(1, nes.Buttons{Start: true})
+			return
+		}
+		c.SetController(1, nes.Buttons{})
+	}
+	if autoStartEvery > 0 && autoStartLen > 0 {
+		setStart(false)
+	}
 	for i := 0; i < frames; i++ {
+		if autoStartEvery > 0 && autoStartLen > 0 {
+			cycle := i % autoStartEvery
+			pressed := cycle < autoStartLen
+			setStart(pressed)
+			if cycle == 0 {
+				ev.AutoStartPulses++
+			}
+		}
 		c.StepFrame()
 		if ev.NonUniformObserved {
 			continue
@@ -157,6 +189,9 @@ func runEvidenceFrames(c *nes.Console, ev *OwnedROMEvidence, frames int, probeIn
 				probe.uniformColor = color
 			}
 		}
+	}
+	if autoStartEvery > 0 && autoStartLen > 0 {
+		setStart(false)
 	}
 }
 

@@ -54,3 +54,4 @@
 - Improved `owned-evidence` scoring by tracking intermediate non-uniform frame observation.
 - Added adaptive extension in `owned-evidence` (uniform runs get additional frames) plus mapper hotspot reporting for triage.
 - Added uniform-color transition tracking in `owned-evidence`, reducing false WARN classification for active-but-uniform scenes.
+- Added CPU pause diagnostics (`last_cpu_error` in state + owned-evidence pause metadata) to accelerate real-ROM failure triage.

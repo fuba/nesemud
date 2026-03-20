@@ -35,3 +35,6 @@
 - `ppu`, `apu`, and `mapper` suite modes now have health-probe fallback, but still need stronger reference-oracle coverage beyond these heuristics.
 - Real-ROM evidence collection exists; remaining WARN clusters now narrowed for direct fixes.
   - Current `owned-evidence` snapshot (`frames=60`) improved from 31 to 4 action items after adaptive probing and uniform-color transition tracking.
+- Added runtime pause diagnostics:
+  - `state.last_cpu_error` is now exposed from `Console.State()`.
+  - owned-evidence captures `pause_reason`, `pause_pc`, and `pause_opcode` for direct root-cause triage.
