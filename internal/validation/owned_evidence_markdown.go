@@ -20,16 +20,22 @@ func FormatOwnedROMEvidenceMarkdown(report OwnedROMEvidenceReport) string {
 	b.WriteString(fmt.Sprintf("- Healthy runs: %d\n", okCount))
 	b.WriteString(fmt.Sprintf("- Needs review: %d\n\n", len(report.Results)-okCount))
 
-	b.WriteString("| ROM | Result | Frames | Paused | Uniform Frame | Audio Active | Audio Peak | APU 4015 | APU 4017 | Notes |\n")
-	b.WriteString("| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |\n")
+	b.WriteString("| ROM | Result | Frames | Paused | Uniform Frame | Non-Uniform Seen | First Non-Uniform Frame | Audio Active | Audio Peak | APU 4015 | APU 4017 | Notes |\n")
+	b.WriteString("| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |\n")
 	for _, r := range report.Results {
 		result, notes := ownedEvidenceStatus(r), ownedEvidenceNotes(r)
-		b.WriteString(fmt.Sprintf("| %s | %s | %d | %t | %t | %d | %d | %d | %d | %s |\n",
+		firstNonUniform := "-"
+		if r.NonUniformObserved && r.FirstNonUniformFrame > 0 {
+			firstNonUniform = fmt.Sprintf("%d", r.FirstNonUniformFrame)
+		}
+		b.WriteString(fmt.Sprintf("| %s | %s | %d | %t | %t | %t | %s | %d | %d | %d | %d | %s |\n",
 			r.Name,
 			result,
 			r.FrameCount,
 			r.Paused,
 			r.UniformFrame,
+			r.NonUniformObserved,
+			firstNonUniform,
 			r.AudioActiveSamples,
 			r.AudioPeakAbs,
 			r.APUWrite4015,
@@ -48,7 +54,7 @@ func ownedEvidenceStatus(r OwnedROMEvidence) string {
 	if r.Paused {
 		return "FAIL"
 	}
-	if r.UniformFrame {
+	if ownedEvidenceUniformStuck(r) {
 		return "WARN"
 	}
 	return "OK"
@@ -61,7 +67,7 @@ func ownedEvidenceNotes(r OwnedROMEvidence) string {
 	if r.Paused {
 		return "paused during run"
 	}
-	if r.UniformFrame {
+	if ownedEvidenceUniformStuck(r) {
 		return "uniform frame output"
 	}
 	return ""
@@ -149,11 +155,15 @@ func ownedEvidenceOwner(r OwnedROMEvidence) string {
 	if r.Paused {
 		return "cpu/irq"
 	}
-	if r.UniformFrame {
+	if ownedEvidenceUniformStuck(r) {
 		if r.AudioActiveSamples > 0 || r.AudioPeakAbs > 0 || r.APUWrite4015 > 0 || r.APUWrite4017 > 0 {
 			return "ppu/mapper"
 		}
 		return "cpu/boot"
 	}
 	return "unknown"
+}
+
+func ownedEvidenceUniformStuck(r OwnedROMEvidence) bool {
+	return r.UniformFrame && !r.NonUniformObserved
 }

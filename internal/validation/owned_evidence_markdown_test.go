@@ -7,7 +7,7 @@ import (
 
 func TestFormatOwnedROMEvidenceMarkdown(t *testing.T) {
 	report := OwnedROMEvidenceReport{
-		ROMCount: 3,
+		ROMCount: 4,
 		Results: []OwnedROMEvidence{
 			{
 				Name:               "ok.nes",
@@ -23,6 +23,13 @@ func TestFormatOwnedROMEvidenceMarkdown(t *testing.T) {
 				Name:         "warn.nes",
 				FrameCount:   60,
 				UniformFrame: true,
+			},
+			{
+				Name:                 "ok-after-boot.nes",
+				FrameCount:           120,
+				UniformFrame:         true,
+				NonUniformObserved:   true,
+				FirstNonUniformFrame: 45,
 			},
 			{
 				Name:         "fail.nes",
@@ -43,6 +50,9 @@ func TestFormatOwnedROMEvidenceMarkdown(t *testing.T) {
 	}
 	if !strings.Contains(md, "| warn.nes | WARN |") {
 		t.Fatalf("missing warn row: %s", md)
+	}
+	if !strings.Contains(md, "| ok-after-boot.nes | OK |") {
+		t.Fatalf("missing recovered row: %s", md)
 	}
 	if !strings.Contains(md, "| fail.nes | ERROR |") {
 		t.Fatalf("missing error row: %s", md)

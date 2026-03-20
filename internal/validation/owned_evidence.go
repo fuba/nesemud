@@ -11,15 +11,17 @@ import (
 )
 
 type OwnedROMEvidence struct {
-	Name               string `json:"name"`
-	FrameCount         uint64 `json:"frame_count"`
-	Paused             bool   `json:"paused"`
-	UniformFrame       bool   `json:"uniform_frame"`
-	AudioActiveSamples int    `json:"audio_active_samples"`
-	AudioPeakAbs       int    `json:"audio_peak_abs"`
-	APUWrite4015       uint64 `json:"apu_write_4015"`
-	APUWrite4017       uint64 `json:"apu_write_4017"`
-	Error              string `json:"error,omitempty"`
+	Name                 string `json:"name"`
+	FrameCount           uint64 `json:"frame_count"`
+	Paused               bool   `json:"paused"`
+	UniformFrame         bool   `json:"uniform_frame"`
+	NonUniformObserved   bool   `json:"non_uniform_observed"`
+	FirstNonUniformFrame int    `json:"first_non_uniform_frame,omitempty"`
+	AudioActiveSamples   int    `json:"audio_active_samples"`
+	AudioPeakAbs         int    `json:"audio_peak_abs"`
+	APUWrite4015         uint64 `json:"apu_write_4015"`
+	APUWrite4017         uint64 `json:"apu_write_4017"`
+	Error                string `json:"error,omitempty"`
 }
 
 type OwnedROMEvidenceReport struct {
@@ -53,7 +55,7 @@ func CollectOwnedROMEvidence(romDir string, frames int) (OwnedROMEvidenceReport,
 	}
 	for _, name := range romNames {
 		path := filepath.Join(romDir, name)
-		ev := OwnedROMEvidence{Name: name}
+		ev := OwnedROMEvidence{Name: name, FirstNonUniformFrame: -1}
 		data, err := os.ReadFile(path)
 		if err != nil {
 			ev.Error = fmt.Sprintf("read rom: %v", err)
@@ -66,8 +68,18 @@ func CollectOwnedROMEvidence(romDir string, frames int) (OwnedROMEvidenceReport,
 			report.Results = append(report.Results, ev)
 			continue
 		}
+		const frameProbeInterval = 15
 		for i := 0; i < frames; i++ {
 			c.StepFrame()
+			if ev.NonUniformObserved {
+				continue
+			}
+			if i%frameProbeInterval == 0 || i == frames-1 {
+				if !isUniformFrame(c.SnapshotFrame()) {
+					ev.NonUniformObserved = true
+					ev.FirstNonUniformFrame = i + 1
+				}
+			}
 		}
 
 		st := c.State()
@@ -79,6 +91,10 @@ func CollectOwnedROMEvidence(romDir string, frames int) (OwnedROMEvidenceReport,
 		}
 		frame := c.SnapshotFrame()
 		ev.UniformFrame = isUniformFrame(frame)
+		if !ev.NonUniformObserved && !ev.UniformFrame {
+			ev.NonUniformObserved = true
+			ev.FirstNonUniformFrame = frames
+		}
 		if audio, ok := st["audio"].(map[string]any); ok {
 			if v, ok := audio["active_samples"].(int); ok {
 				ev.AudioActiveSamples = v

@@ -1,8 +1,8 @@
 # Owned ROM Evidence Checklist
 
 - ROM count: 62
-- Action items: 32
-- Healthy runs: 30
+- Action items: 31
+- Healthy runs: 31
 
 ## Priority Backlog
 
@@ -36,6 +36,5 @@
 - [ ] `WARN` Tetris (USA).nes (ppu/mapper): uniform frame output
 - [ ] `WARN` Valkyrie no Bouken - Toki no Kagi Densetsu (Japan).nes (ppu/mapper): uniform frame output
 - [ ] `WARN` Wario no Mori (Japan).nes (ppu/mapper): uniform frame output
-- [ ] `WARN` Xevious (Japan).nes (ppu/mapper): uniform frame output
 - [ ] `WARN` Zoids - Chuuou Tairiku no Tatakai (Japan).nes (ppu/mapper): uniform frame output
 

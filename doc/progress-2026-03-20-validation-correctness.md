@@ -16,6 +16,9 @@
 - Added health-probe fallback for suites without status protocol (`ppu`/`apu`/`mapper`):
   - `ppu`/`mapper`: fail long-run uniform-frame output
   - `apu`: fail when no audio/APU activity is observed
+- Improved owned-ROM evidence quality by sampling intermediate frames:
+  - records whether any non-uniform frame was observed
+  - warns only when output remains uniform for the full run
 
 ## Validation
 - Added/updated tests in:
