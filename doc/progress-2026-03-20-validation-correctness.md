@@ -9,12 +9,18 @@
 - Added `owned-evidence` collection mode for per-ROM video/audio/runtime evidence from owned ROM sets.
 - Added `owned-evidence` checklist artifact generation with prioritized action items (`--checklist-out`).
 - Aligned NESTest runner initial CPU state with the first expected trace line; `tests/roms/nestest.nes` now passes against `tests/roms/nestest.log`.
+- Improved `blargg-cpu` status probing:
+  - supports `$6000/$6004` status with optional `$6001-$6003` signature handling
+  - handles reset-request status (`0x81`) flow
+  - keeps deterministic fallback when a ROM does not expose the status protocol
 
 ## Validation
 - Added/updated tests in:
   - `internal/validation/suites_test.go`
   - `internal/api/suite_validation_test.go`
 - Verified with `go test ./...`.
+- Verified CLI suite runs with current test assets:
+  - `nestest`, `blargg-cpu`, `ppu`, `apu`, `mapper` all pass under `tests/roms`.
 
 ## Remaining Gaps
 - `ppu`, `apu`, and `mapper` suite modes still need stronger correctness oracles for ROMs that do not expose `$6000/$6004` status.

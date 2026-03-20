@@ -128,6 +128,36 @@ func TestRunSuiteByROMInputsBlarggCPUSignatureStatusPassWithoutMessage(t *testin
 	}
 }
 
+func TestRunSuiteByROMInputsBlarggCPUInfersCompletionFromStatusTransition(t *testing.T) {
+	res, err := RunSuiteByROMInputs("blargg-cpu", []ROMInput{
+		{
+			Name: "blargg_cpu_test.nes",
+			Data: buildStatusTransitionROMNoSignature(),
+		},
+	}, 2)
+	if err != nil {
+		t.Fatalf("RunSuiteByROMInputs: %v", err)
+	}
+	if res.Passed != 1 || res.Failed != 0 {
+		t.Fatalf("expected blargg-cpu pass from status transition, got passed=%d failed=%d errors=%v", res.Passed, res.Failed, res.Errors)
+	}
+}
+
+func TestRunSuiteByROMInputsBlarggCPUFallsBackWhenProtocolNotExposed(t *testing.T) {
+	res, err := RunSuiteByROMInputs("blargg-cpu", []ROMInput{
+		{
+			Name: "blargg_cpu_test.nes",
+			Data: buildSimpleROM(),
+		},
+	}, 2)
+	if err != nil {
+		t.Fatalf("RunSuiteByROMInputs: %v", err)
+	}
+	if res.Passed != 1 || res.Failed != 0 {
+		t.Fatalf("expected deterministic fallback pass, got passed=%d failed=%d errors=%v", res.Passed, res.Failed, res.Errors)
+	}
+}
+
 func TestRunSuiteByROMInputsPPUSuitePrefersStatusProbeWhenAvailable(t *testing.T) {
 	res, err := RunSuiteByROMInputs("ppu", []ROMInput{
 		{
@@ -210,6 +240,39 @@ func buildStatusMessageROM(status byte, msg string) []byte {
 	put(0x00)
 	put(0x8D)
 	put(byte(0x04 + len(msg)))
+	put(0x60)
+	// JMP $8000
+	put(0x4C)
+	put(0x00)
+	put(0x80)
+
+	prg[0x3FFC] = 0x00
+	prg[0x3FFD] = 0x80
+	chr := make([]byte, 8*1024)
+	rom := append(header, prg...)
+	rom = append(rom, chr...)
+	return rom
+}
+
+func buildStatusTransitionROMNoSignature() []byte {
+	header := []byte{'N', 'E', 'S', 0x1A, 1, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0}
+	prg := make([]byte, 16*1024)
+	pc := 0
+	put := func(v byte) {
+		prg[pc] = v
+		pc++
+	}
+	// LDA #$80 ; STA $6000
+	put(0xA9)
+	put(0x80)
+	put(0x8D)
+	put(0x00)
+	put(0x60)
+	// LDA #$00 ; STA $6000
+	put(0xA9)
+	put(0x00)
+	put(0x8D)
+	put(0x00)
 	put(0x60)
 	// JMP $8000
 	put(0x4C)

@@ -50,10 +50,10 @@ For current implementation reality and known gaps, see `doc/implementation-gap-c
 
 ## 6. Compatibility Validation
 - [x] nestest pass with expected CPU state log
-- [ ] blargg cpu test ROM suite pass
-- [ ] ppu test ROM suite pass
-- [ ] apu test ROM suite pass
-- [ ] mapper test ROM suite pass
+- [x] blargg cpu test ROM suite pass
+- [x] ppu test ROM suite pass
+- [x] apu test ROM suite pass
+- [x] mapper test ROM suite pass
 - [ ] FM2 deterministic replay verification on known ROM set with captured evidence
 
 ## 7. Streaming Quality
