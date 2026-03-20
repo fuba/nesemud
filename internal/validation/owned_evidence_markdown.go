@@ -20,8 +20,8 @@ func FormatOwnedROMEvidenceMarkdown(report OwnedROMEvidenceReport) string {
 	b.WriteString(fmt.Sprintf("- Healthy runs: %d\n", okCount))
 	b.WriteString(fmt.Sprintf("- Needs review: %d\n\n", len(report.Results)-okCount))
 
-	b.WriteString("| ROM | Mapper | Result | Frames | Extended | Extra Frames | Paused | Uniform Frame | Non-Uniform Seen | First Non-Uniform Frame | Audio Active | Audio Peak | APU 4015 | APU 4017 | Notes |\n")
-	b.WriteString("| --- | ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |\n")
+	b.WriteString("| ROM | Mapper | Result | Frames | Extended | Extra Frames | Paused | Uniform Frame | Non-Uniform Seen | Uniform Color Changes | First Non-Uniform Frame | Audio Active | Audio Peak | APU 4015 | APU 4017 | Notes |\n")
+	b.WriteString("| --- | ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |\n")
 	for _, r := range report.Results {
 		result, notes := ownedEvidenceStatus(r), ownedEvidenceNotes(r)
 		firstNonUniform := "-"
@@ -32,7 +32,7 @@ func FormatOwnedROMEvidenceMarkdown(report OwnedROMEvidenceReport) string {
 		if r.ExtraFrames > 0 {
 			extraFrames = fmt.Sprintf("%d", r.ExtraFrames)
 		}
-		b.WriteString(fmt.Sprintf("| %s | %d | %s | %d | %t | %s | %t | %t | %t | %s | %d | %d | %d | %d | %s |\n",
+		b.WriteString(fmt.Sprintf("| %s | %d | %s | %d | %t | %s | %t | %t | %t | %d | %s | %d | %d | %d | %d | %s |\n",
 			r.Name,
 			r.Mapper,
 			result,
@@ -42,6 +42,7 @@ func FormatOwnedROMEvidenceMarkdown(report OwnedROMEvidenceReport) string {
 			r.Paused,
 			r.UniformFrame,
 			r.NonUniformObserved,
+			r.UniformColorChanges,
 			firstNonUniform,
 			r.AudioActiveSamples,
 			r.AudioPeakAbs,
@@ -211,5 +212,5 @@ func ownedEvidenceOwner(r OwnedROMEvidence) string {
 }
 
 func ownedEvidenceUniformStuck(r OwnedROMEvidence) bool {
-	return r.UniformFrame && !r.NonUniformObserved
+	return r.UniformFrame && !r.NonUniformObserved && r.UniformColorChanges == 0
 }

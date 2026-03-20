@@ -18,6 +18,7 @@ type OwnedROMEvidence struct {
 	UniformFrame         bool   `json:"uniform_frame"`
 	NonUniformObserved   bool   `json:"non_uniform_observed"`
 	FirstNonUniformFrame int    `json:"first_non_uniform_frame,omitempty"`
+	UniformColorChanges  int    `json:"uniform_color_changes,omitempty"`
 	ExtendedRun          bool   `json:"extended_run,omitempty"`
 	ExtraFrames          int    `json:"extra_frames,omitempty"`
 	AudioActiveSamples   int    `json:"audio_active_samples"`
@@ -75,13 +76,14 @@ func CollectOwnedROMEvidence(romDir string, frames int) (OwnedROMEvidenceReport,
 			continue
 		}
 		const frameProbeInterval = 15
-		runEvidenceFrames(c, &ev, frames, frameProbeInterval)
+		var probe evidenceProbeState
+		runEvidenceFrames(c, &ev, frames, frameProbeInterval, &probe)
 		if frames >= 60 {
 			st := c.State()
 			paused, _ := st["paused"].(bool)
 			if !paused && !ev.NonUniformObserved {
 				extra := max(frames, 180)
-				runEvidenceFrames(c, &ev, extra, frameProbeInterval)
+				runEvidenceFrames(c, &ev, extra, frameProbeInterval, &probe)
 				ev.ExtendedRun = true
 				ev.ExtraFrames = extra
 			}
@@ -122,7 +124,12 @@ func CollectOwnedROMEvidence(romDir string, frames int) (OwnedROMEvidenceReport,
 	return report, nil
 }
 
-func runEvidenceFrames(c *nes.Console, ev *OwnedROMEvidence, frames int, probeInterval int) {
+type evidenceProbeState struct {
+	haveUniformColor bool
+	uniformColor     uint32
+}
+
+func runEvidenceFrames(c *nes.Console, ev *OwnedROMEvidence, frames int, probeInterval int, probe *evidenceProbeState) {
 	if frames <= 0 {
 		return
 	}
@@ -132,15 +139,29 @@ func runEvidenceFrames(c *nes.Console, ev *OwnedROMEvidence, frames int, probeIn
 			continue
 		}
 		if i%probeInterval == 0 || i == frames-1 {
-			if !isUniformFrame(c.SnapshotFrame()) {
+			frame := c.SnapshotFrame()
+			if !isUniformFrame(frame) {
 				ev.NonUniformObserved = true
 				st := c.State()
 				if fc, ok := st["frame_count"].(uint64); ok {
 					ev.FirstNonUniformFrame = int(fc)
 				}
+				continue
+			}
+			if len(frame) >= 3 && probe != nil {
+				color := rgbKey(frame[0], frame[1], frame[2])
+				if probe.haveUniformColor && probe.uniformColor != color {
+					ev.UniformColorChanges++
+				}
+				probe.haveUniformColor = true
+				probe.uniformColor = color
 			}
 		}
 	}
+}
+
+func rgbKey(r, g, b byte) uint32 {
+	return uint32(r)<<16 | uint32(g)<<8 | uint32(b)
 }
 
 func isUniformFrame(frame []byte) bool {

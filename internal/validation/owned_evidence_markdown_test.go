@@ -27,6 +27,13 @@ func TestFormatOwnedROMEvidenceMarkdown(t *testing.T) {
 				UniformFrame: true,
 			},
 			{
+				Name:                "uniform-but-changing.nes",
+				Mapper:              1,
+				FrameCount:          90,
+				UniformFrame:        true,
+				UniformColorChanges: 2,
+			},
+			{
 				Name:                 "ok-after-boot.nes",
 				Mapper:               2,
 				FrameCount:           120,
@@ -56,6 +63,9 @@ func TestFormatOwnedROMEvidenceMarkdown(t *testing.T) {
 	}
 	if !strings.Contains(md, "| warn.nes | 4 | WARN |") {
 		t.Fatalf("missing warn row: %s", md)
+	}
+	if !strings.Contains(md, "| uniform-but-changing.nes | 1 | OK |") {
+		t.Fatalf("missing uniform-changing row: %s", md)
 	}
 	if !strings.Contains(md, "| ok-after-boot.nes | 2 | OK |") {
 		t.Fatalf("missing recovered row: %s", md)
@@ -103,5 +113,16 @@ func TestFormatOwnedROMEvidenceChecklistMarkdown(t *testing.T) {
 	}
 	if !strings.Contains(md, "`WARN` warn-boot.nes (cpu/boot): uniform frame output (mapper 2)") {
 		t.Fatalf("missing boot warn row: %s", md)
+	}
+}
+
+func TestOwnedEvidenceUniformStuckIgnoresChangingUniformColor(t *testing.T) {
+	r := OwnedROMEvidence{
+		UniformFrame:        true,
+		NonUniformObserved:  false,
+		UniformColorChanges: 1,
+	}
+	if ownedEvidenceUniformStuck(r) {
+		t.Fatalf("expected non-stuck for changing uniform color")
 	}
 }

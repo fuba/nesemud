@@ -20,6 +20,7 @@
   - records whether any non-uniform frame was observed
   - warns only when output remains uniform for the full run
   - extends runtime for uniform-only ROMs (`+180` frames) before final warning
+  - tracks uniform color transitions and treats changing-uniform output as active (not stuck)
   - includes mapper IDs and hotspot summary in checklist output
 
 ## Validation
@@ -32,5 +33,5 @@
 
 ## Remaining Gaps
 - `ppu`, `apu`, and `mapper` suite modes now have health-probe fallback, but still need stronger reference-oracle coverage beyond these heuristics.
-- Real-ROM evidence collection exists, but WARN-heavy ROM clusters still require subsystem-level triage and fixes.
-  - Current `owned-evidence` snapshot (`frames=60`) improved from 31 to 21 action items after extended probing.
+- Real-ROM evidence collection exists; remaining WARN clusters now narrowed for direct fixes.
+  - Current `owned-evidence` snapshot (`frames=60`) improved from 31 to 4 action items after adaptive probing and uniform-color transition tracking.
