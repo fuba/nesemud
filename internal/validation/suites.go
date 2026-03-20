@@ -112,6 +112,7 @@ func RunSuiteByROMInputs(suite string, roms []ROMInput, frames int) (SuiteResult
 			res.Errors = append(res.Errors, fmt.Sprintf("%s: non-deterministic", r.Name))
 			continue
 		}
+		statusConclusive := false
 		if suiteUsesStatusProbe(suite) {
 			conclusive, ok, detail, err := runStatusProbe(r.Data, frames, suite)
 			if err != nil {
@@ -136,6 +137,20 @@ func RunSuiteByROMInputs(suite string, roms []ROMInput, frames int) (SuiteResult
 					res.Errors = append(res.Errors, fmt.Sprintf("%s: %s", r.Name, detail))
 					continue
 				}
+			}
+			statusConclusive = conclusive
+		}
+		if !statusConclusive && suiteNeedsHealthProbe(suite) {
+			ok, detail, err := runSuiteHealthProbe(r.Data, frames, suite)
+			if err != nil {
+				res.Failed++
+				res.Errors = append(res.Errors, fmt.Sprintf("%s: %v", r.Name, err))
+				continue
+			}
+			if !ok {
+				res.Failed++
+				res.Errors = append(res.Errors, fmt.Sprintf("%s: %s", r.Name, detail))
+				continue
 			}
 		}
 		res.Passed++
@@ -182,6 +197,15 @@ func loadAdjacentNESTestLog(romPath string) (string, bool, error) {
 func suiteUsesStatusProbe(suite string) bool {
 	switch strings.ToLower(strings.TrimSpace(suite)) {
 	case "blargg-cpu", "ppu", "apu", "mapper":
+		return true
+	default:
+		return false
+	}
+}
+
+func suiteNeedsHealthProbe(suite string) bool {
+	switch strings.ToLower(strings.TrimSpace(suite)) {
+	case "ppu", "apu", "mapper":
 		return true
 	default:
 		return false
@@ -291,6 +315,53 @@ func statusProbePauseDetail(c *nes.Console) (bool, string) {
 		return true, fmt.Sprintf("emulation paused at PC=%04X A=%02X X=%02X Y=%02X P=%02X SP=%02X", pc, a, x, y, p, sp)
 	}
 	return true, "emulation paused"
+}
+
+func runSuiteHealthProbe(rom []byte, frames int, suite string) (bool, string, error) {
+	if frames <= 0 {
+		frames = 1200
+	}
+	c := nes.NewConsole()
+	if err := c.LoadROMContent(rom); err != nil {
+		return false, "", err
+	}
+	for i := 0; i < frames; i++ {
+		c.StepFrame()
+	}
+	if paused, detail := statusProbePauseDetail(c); paused {
+		return false, detail, nil
+	}
+	// Ignore very short runs used by unit tests; probe is intended for compatibility-length runs.
+	if frames < 60 {
+		return true, "", nil
+	}
+	frame := c.SnapshotFrame()
+	state := c.State()
+	switch strings.ToLower(strings.TrimSpace(suite)) {
+	case "ppu":
+		if isUniformFrame(frame) {
+			return false, "uniform frame output (no status protocol)", nil
+		}
+	case "apu":
+		if apuSilentByState(state) {
+			return false, "no APU/audio activity detected (no status protocol)", nil
+		}
+	case "mapper":
+		if isUniformFrame(frame) {
+			return false, "uniform frame output (no status protocol)", nil
+		}
+	}
+	return true, "", nil
+}
+
+func apuSilentByState(st map[string]any) bool {
+	audio, _ := st["audio"].(map[string]any)
+	apu, _ := st["apu"].(map[string]any)
+	activeSamples, _ := audio["active_samples"].(int)
+	peakAbs, _ := audio["peak_abs"].(int)
+	write4015, _ := apu["write_count_4015"].(uint64)
+	write4017, _ := apu["write_count_4017"].(uint64)
+	return activeSamples == 0 && peakAbs == 0 && write4015 == 0 && write4017 == 0
 }
 
 func decodeASCIIZ(b []byte) string {

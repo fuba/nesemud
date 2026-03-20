@@ -13,6 +13,9 @@
   - supports `$6000/$6004` status with optional `$6001-$6003` signature handling
   - handles reset-request status (`0x81`) flow
   - keeps deterministic fallback when a ROM does not expose the status protocol
+- Added health-probe fallback for suites without status protocol (`ppu`/`apu`/`mapper`):
+  - `ppu`/`mapper`: fail long-run uniform-frame output
+  - `apu`: fail when no audio/APU activity is observed
 
 ## Validation
 - Added/updated tests in:
@@ -23,5 +26,5 @@
   - `nestest`, `blargg-cpu`, `ppu`, `apu`, `mapper` all pass under `tests/roms`.
 
 ## Remaining Gaps
-- `ppu`, `apu`, and `mapper` suite modes still need stronger correctness oracles for ROMs that do not expose `$6000/$6004` status.
+- `ppu`, `apu`, and `mapper` suite modes now have health-probe fallback, but still need stronger reference-oracle coverage beyond these heuristics.
 - Real-ROM evidence collection exists, but WARN-heavy ROM clusters still require subsystem-level triage and fixes.

@@ -34,7 +34,7 @@ The codebase passes unit tests, but real ROM testing shows several compatibility
 - [ ] Validate mirroring and IRQ behavior against real-game scenarios, not only focused unit tests.
 
 ## 5. Validation / Tooling
-- [ ] Replace "determinism-only" suite checks with correctness-oriented compatibility checks (`nestest` and `blargg-cpu` improved; `ppu`/`apu`/`mapper` still pending).
+- [ ] Replace "determinism-only" suite checks with correctness-oriented compatibility checks (`nestest` and `blargg-cpu` improved; `ppu`/`apu`/`mapper` now include health-probe fallback but still need stronger reference oracles).
 - [x] Add owned-ROM smoke coverage that boots every locally-owned ROM for a short run.
 - [x] Add longer real-ROM regression tests for `Gradius` and `Just Breed` that verify frame progression, non-uniform video, and APU register activity.
 - [x] Add owned-ROM checklist with captured evidence for video and audio, not just boot smoke coverage (`owned-evidence` now supports `--checklist-out` markdown generation).

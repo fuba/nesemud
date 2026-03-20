@@ -49,3 +49,5 @@
 - Added mid-frame `PPUCTRL`/`PPUSCROLL` split-state capture for same-scanline rendering transitions.
 - Added `owned-evidence` validation mode to collect per-ROM video/audio/runtime evidence from owned ROM directories.
 - Added `owned-evidence` checklist markdown generation (`--checklist-out`) with prioritized action items.
+- Refined `blargg-cpu` suite probing to support status protocol variants while keeping deterministic fallback for ROMs that do not expose `$6000/$6004`.
+- Added health-probe fallback checks for `ppu`/`apu`/`mapper` suites when status protocol is unavailable.

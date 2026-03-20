@@ -188,6 +188,51 @@ func TestRunSuiteByROMInputsPPUSuiteFallsBackWithoutStatusProbe(t *testing.T) {
 	}
 }
 
+func TestRunSuiteByROMInputsPPUSuiteLongRunFailsOnUniformFallback(t *testing.T) {
+	res, err := RunSuiteByROMInputs("ppu", []ROMInput{
+		{
+			Name: "ppu_case.nes",
+			Data: buildSimpleROM(),
+		},
+	}, 60)
+	if err != nil {
+		t.Fatalf("RunSuiteByROMInputs: %v", err)
+	}
+	if res.Passed != 0 || res.Failed != 1 {
+		t.Fatalf("expected ppu suite fail from uniform fallback, got passed=%d failed=%d errors=%v", res.Passed, res.Failed, res.Errors)
+	}
+}
+
+func TestRunSuiteByROMInputsAPUSuiteLongRunFailsOnSilentFallback(t *testing.T) {
+	res, err := RunSuiteByROMInputs("apu", []ROMInput{
+		{
+			Name: "apu_case.nes",
+			Data: buildSimpleROM(),
+		},
+	}, 60)
+	if err != nil {
+		t.Fatalf("RunSuiteByROMInputs: %v", err)
+	}
+	if res.Passed != 0 || res.Failed != 1 {
+		t.Fatalf("expected apu suite fail from silent fallback, got passed=%d failed=%d errors=%v", res.Passed, res.Failed, res.Errors)
+	}
+}
+
+func TestRunSuiteByROMInputsMapperSuiteLongRunFailsOnUniformFallback(t *testing.T) {
+	res, err := RunSuiteByROMInputs("mapper", []ROMInput{
+		{
+			Name: "mapper_case.nes",
+			Data: buildSimpleROM(),
+		},
+	}, 60)
+	if err != nil {
+		t.Fatalf("RunSuiteByROMInputs: %v", err)
+	}
+	if res.Passed != 0 || res.Failed != 1 {
+		t.Fatalf("expected mapper suite fail from uniform fallback, got passed=%d failed=%d errors=%v", res.Passed, res.Failed, res.Errors)
+	}
+}
+
 func TestDecodeASCIIZSkipsLeadingControlBytes(t *testing.T) {
 	got := decodeASCIIZ([]byte{'\n', '\r', 'P', 'a', 's', 's', 0x00})
 	if got != "Pass" {
