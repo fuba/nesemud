@@ -18,6 +18,8 @@ type OwnedROMEvidence struct {
 	PauseReason          string `json:"pause_reason,omitempty"`
 	PausePC              uint16 `json:"pause_pc,omitempty"`
 	PauseOpcode          byte   `json:"pause_opcode,omitempty"`
+	FinalPC              uint16 `json:"final_pc,omitempty"`
+	SampledPCUnique      int    `json:"sampled_pc_unique,omitempty"`
 	UniformFrame         bool   `json:"uniform_frame"`
 	NonUniformObserved   bool   `json:"non_uniform_observed"`
 	FirstNonUniformFrame int    `json:"first_non_uniform_frame,omitempty"`
@@ -80,7 +82,7 @@ func CollectOwnedROMEvidence(romDir string, frames int) (OwnedROMEvidenceReport,
 			continue
 		}
 		const frameProbeInterval = 15
-		var probe evidenceProbeState
+		probe := evidenceProbeState{sampledPC: map[uint16]struct{}{}}
 		runEvidenceFrames(c, &ev, frames, frameProbeInterval, &probe, 0, 0)
 		if frames >= 60 {
 			st := c.State()
@@ -110,6 +112,8 @@ func CollectOwnedROMEvidence(romDir string, frames int) (OwnedROMEvidenceReport,
 				ev.PauseOpcode = b[0]
 			}
 		}
+		ev.SampledPCUnique = len(probe.sampledPC)
+		ev.FinalPC = c.SnapshotCPU().PC
 		frame := c.SnapshotFrame()
 		ev.UniformFrame = isUniformFrame(frame)
 		if !ev.NonUniformObserved && !ev.UniformFrame {
@@ -141,6 +145,7 @@ func CollectOwnedROMEvidence(romDir string, frames int) (OwnedROMEvidenceReport,
 type evidenceProbeState struct {
 	haveUniformColor bool
 	uniformColor     uint32
+	sampledPC        map[uint16]struct{}
 }
 
 func runEvidenceFrames(c *nes.Console, ev *OwnedROMEvidence, frames int, probeInterval int, probe *evidenceProbeState, autoStartEvery int, autoStartLen int) {
@@ -171,6 +176,12 @@ func runEvidenceFrames(c *nes.Console, ev *OwnedROMEvidence, frames int, probeIn
 			continue
 		}
 		if i%probeInterval == 0 || i == frames-1 {
+			if probe != nil {
+				if probe.sampledPC == nil {
+					probe.sampledPC = map[uint16]struct{}{}
+				}
+				probe.sampledPC[c.SnapshotCPU().PC] = struct{}{}
+			}
 			frame := c.SnapshotFrame()
 			if !isUniformFrame(frame) {
 				ev.NonUniformObserved = true
