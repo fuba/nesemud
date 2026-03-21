@@ -43,7 +43,7 @@ func LoadINES(data []byte) (*Cartridge, error) {
 		mirroring = MirroringVertical
 	}
 	hasBattery := flags6&0x02 != 0
-	prgRAMSize := inferINESPRGRAMSize(data[8], flags6&0x04 != 0)
+	prgRAMSize := inferINESPRGRAMSize(data[8], mapper, flags6&0x04 != 0)
 
 	cart := &Cartridge{
 		PRG:        append([]byte(nil), data[offset:offset+prgLen]...),
@@ -116,14 +116,21 @@ func inesHeaderTailIsZero(trailing []byte) bool {
 	return true
 }
 
-func inferINESPRGRAMSize(byte8 byte, hasTrainer bool) int {
+func inferINESPRGRAMSize(byte8 byte, mapper byte, hasTrainer bool) int {
 	if byte8 != 0 {
 		return int(byte8) * 8 * 1024
 	}
 	if hasTrainer {
 		return 8 * 1024
 	}
-	return 0
+	// For common board families where iNES byte8 is frequently omitted,
+	// use the usual 8 KiB default to keep mapper RAM behavior practical.
+	switch mapper {
+	case 1, 5:
+		return 8 * 1024
+	default:
+		return 0
+	}
 }
 
 func isSupportedMapper(mapper byte) bool {
@@ -270,7 +277,27 @@ func (c *Cartridge) writeCHR(addr uint16, value byte) {
 	if !c.CHRIsRAM || len(c.CHR) == 0 {
 		return
 	}
-	c.CHR[int(addr)%len(c.CHR)] = value
+	switch c.Mapper {
+	case 1:
+		if c.mmc1Control&0x10 == 0 {
+			bank8k := int(c.mmc1CHRBank0&0x1E) % max(1, len(c.CHR)/(8*1024))
+			base := bank8k * 8 * 1024
+			c.CHR[base+int(addr&0x1FFF)] = value
+			return
+		}
+		if addr < 0x1000 {
+			bank4k := int(c.mmc1CHRBank0) % max(1, len(c.CHR)/(4*1024))
+			base := bank4k * 4 * 1024
+			c.CHR[base+int(addr&0x0FFF)] = value
+			return
+		}
+		bank4k := int(c.mmc1CHRBank1) % max(1, len(c.CHR)/(4*1024))
+		base := bank4k * 4 * 1024
+		c.CHR[base+int(addr&0x0FFF)] = value
+		return
+	default:
+		c.CHR[int(addr)%len(c.CHR)] = value
+	}
 }
 
 func (c *Cartridge) readPRGMapper1(addr uint16) byte {
@@ -815,8 +842,11 @@ func (c *Cartridge) readPRGRAM(addr uint16) byte {
 
 func (c *Cartridge) writePRGRAM(addr uint16, value byte) {
 	if c.Mapper != 5 {
-		if len(c.PRGRAM) == 0 {
+		if c.Mapper == 87 {
 			c.writePRG(addr, value)
+			return
+		}
+		if len(c.PRGRAM) == 0 {
 			return
 		}
 		c.PRGRAM[int(addr-0x6000)%len(c.PRGRAM)] = value

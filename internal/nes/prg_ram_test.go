@@ -25,6 +25,33 @@ func TestPRGRAMReadWriteForMapper1(t *testing.T) {
 	}
 }
 
+func TestWrite6000WithoutPRGRAMDoesNotReprogramMMC1(t *testing.T) {
+	c := NewConsole()
+	prg := make([]byte, 4*16*1024)
+	for b := 0; b < 4; b++ {
+		for i := 0; i < 16*1024; i++ {
+			prg[b*16*1024+i] = byte(0x20 + b)
+		}
+	}
+	c.cart = &Cartridge{
+		PRG:       prg,
+		CHR:       make([]byte, 8*1024),
+		Mapper:    1,
+		PRGBanks:  4,
+		CHRBanks:  1,
+		mirroring: MirroringHorizontal,
+	}
+	c.cart.mmc1Reset()
+
+	for i := 0; i < 5; i++ {
+		c.writeCPU(0x6000, 0x01)
+	}
+
+	if got := c.readCPU(0x8000); got != 0x20 {
+		t.Fatalf("0x6000 writes unexpectedly changed MMC1 PRG bank: got 0x%02X want 0x20", got)
+	}
+}
+
 func TestFourScreenMirroringKeepsNametablesDistinct(t *testing.T) {
 	c := NewConsole()
 	c.cart = &Cartridge{
