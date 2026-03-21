@@ -367,7 +367,7 @@ func (c *Console) advanceSubsystemsLocked(cpuCycles int, startCycles uint64, sam
 	if c.ppu.step(c, cpuCycles) {
 		c.cpu.NMI(c)
 	}
-	if c.cart != nil && c.cart.consumeIRQ() {
+	if (c.cart != nil && c.cart.irqPending()) || c.apu.irqPending() {
 		c.cpu.IRQ(c)
 	}
 	if sampleIndex == nil || nextSampleAt == nil {
@@ -394,7 +394,7 @@ func (c *Console) applyAPUDrivenStallLocked() {
 		if c.ppu.step(c, stallCycles) {
 			c.cpu.NMI(c)
 		}
-		if c.cart != nil && c.cart.consumeIRQ() {
+		if (c.cart != nil && c.cart.irqPending()) || c.apu.irqPending() {
 			c.cpu.IRQ(c)
 		}
 	}

@@ -55,3 +55,11 @@
 - Added adaptive extension in `owned-evidence` (uniform runs get additional frames) plus mapper hotspot reporting for triage.
 - Added uniform-color transition tracking in `owned-evidence`, reducing false WARN classification for active-but-uniform scenes.
 - Added CPU pause diagnostics (`last_cpu_error` in state + owned-evidence pause metadata) to accelerate real-ROM failure triage.
+
+## Progress Update (2026-03-22)
+- Fixed MMC3 PRG bank masking to use lower 6 bits and added regression coverage.
+- Fixed MMC3 IRQ clock gating so scanline IRQ only clocks while rendering is enabled.
+- Corrected CPU IRQ line handling so mapper/APU IRQs are level-checked (not consumed on poll), preventing masked-IRQ loss.
+- Connected APU frame/DMC IRQ pending state into CPU IRQ servicing path.
+- Added VRC4 (`mapper 25`) battery-backed PRG-RAM default inference when iNES byte8 is zero.
+- Re-ran full owned-ROM evidence at `--frames 240`; paused/error count reached `0` (uniform WARN backlog remains for deeper PPU/mapper audits).

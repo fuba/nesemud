@@ -729,6 +729,10 @@ func (a *apu) consumeCPUStallCycles() int {
 	return stall
 }
 
+func (a *apu) irqPending() bool {
+	return a.frameIRQ || a.dmc.irqPending
+}
+
 func triangleStep(idx int) int16 {
 	return int16(int(triangleTable[idx&0x1F])*180 - 1350)
 }

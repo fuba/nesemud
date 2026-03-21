@@ -43,7 +43,7 @@ func LoadINES(data []byte) (*Cartridge, error) {
 		mirroring = MirroringVertical
 	}
 	hasBattery := flags6&0x02 != 0
-	prgRAMSize := inferINESPRGRAMSize(data[8], mapper, flags6&0x04 != 0)
+	prgRAMSize := inferINESPRGRAMSize(data[8], mapper, hasBattery, flags6&0x04 != 0)
 
 	cart := &Cartridge{
 		PRG:        append([]byte(nil), data[offset:offset+prgLen]...),
@@ -116,7 +116,7 @@ func inesHeaderTailIsZero(trailing []byte) bool {
 	return true
 }
 
-func inferINESPRGRAMSize(byte8 byte, mapper byte, hasTrainer bool) int {
+func inferINESPRGRAMSize(byte8 byte, mapper byte, hasBattery bool, hasTrainer bool) int {
 	if byte8 != 0 {
 		return int(byte8) * 8 * 1024
 	}
@@ -128,6 +128,11 @@ func inferINESPRGRAMSize(byte8 byte, mapper byte, hasTrainer bool) int {
 	switch mapper {
 	case 1, 5:
 		return 8 * 1024
+	case 23, 25:
+		if hasBattery {
+			return 8 * 1024
+		}
+		return 0
 	default:
 		return 0
 	}
@@ -1078,6 +1083,10 @@ func (c *Cartridge) consumeIRQ() bool {
 		return true
 	}
 	return false
+}
+
+func (c *Cartridge) irqPending() bool {
+	return c.mmc3IRQPending || c.mmc5IRQPending || c.vrcIRQPending
 }
 
 func (c *Cartridge) mmc5ClockScanline() {
