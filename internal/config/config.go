@@ -45,4 +45,7 @@ func applyEnvOverrides(cfg *Config) {
 	if strings.EqualFold(strings.TrimSpace(os.Getenv("ENV")), "DEVELOPMENT") {
 		cfg.ListenAddr = ":18081"
 	}
+	if v := strings.TrimSpace(os.Getenv("NESD_LISTEN_ADDR")); v != "" {
+		cfg.ListenAddr = v
+	}
 }

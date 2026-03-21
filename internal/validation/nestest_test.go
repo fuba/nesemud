@@ -21,7 +21,7 @@ func TestRunNESTestWithSyntheticLog(t *testing.T) {
 	d := t.TempDir()
 	rom := filepath.Join(d, "t.nes")
 	log := filepath.Join(d, "nestest.log")
-	if err := os.WriteFile(rom, buildSimpleROM(), 0o644); err != nil {
+	if err := os.WriteFile(rom, buildSimpleROMWithResetVector(0x8000), 0o644); err != nil {
 		t.Fatalf("write rom: %v", err)
 	}
 	lines := "8000  EA        NOP                             A:00 X:00 Y:00 P:24 SP:FA\n"
@@ -43,17 +43,47 @@ func TestRunNESTestWithSyntheticLog(t *testing.T) {
 	}
 }
 
-func buildSimpleROM() []byte {
+func TestRunNESTestAlignsInitialCPUStateToExpectedTrace(t *testing.T) {
+	d := t.TempDir()
+	rom := filepath.Join(d, "t.nes")
+	log := filepath.Join(d, "nestest.log")
+	if err := os.WriteFile(rom, buildSimpleROMWithResetVector(0x9000), 0o644); err != nil {
+		t.Fatalf("write rom: %v", err)
+	}
+	lines := "8000  EA        NOP                             A:00 X:00 Y:00 P:24 SP:FA\n"
+	lines += "8001  4C 00 80  JMP $8000                       A:00 X:00 Y:00 P:24 SP:FA\n"
+	if err := os.WriteFile(log, []byte(lines), 0o644); err != nil {
+		t.Fatalf("write log: %v", err)
+	}
+
+	res, err := RunNESTest(NESTestRequest{
+		ROMPath:         rom,
+		ExpectedLogPath: log,
+		Instructions:    2,
+	})
+	if err != nil {
+		t.Fatalf("RunNESTest: %v", err)
+	}
+	if !res.Matched {
+		t.Fatalf("expected match, got mismatches: %v", res.Mismatches)
+	}
+}
+
+func buildSimpleROMWithResetVector(resetVector uint16) []byte {
 	header := []byte{'N', 'E', 'S', 0x1A, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
 	prg := make([]byte, 16*1024)
 	prg[0] = 0xEA
 	prg[1] = 0x4C
 	prg[2] = 0x00
 	prg[3] = 0x80
-	prg[0x3FFC] = 0x00
-	prg[0x3FFD] = 0x80
+	prg[0x3FFC] = byte(resetVector & 0x00FF)
+	prg[0x3FFD] = byte((resetVector >> 8) & 0x00FF)
 	chr := make([]byte, 8*1024)
 	rom := append(header, prg...)
 	rom = append(rom, chr...)
 	return rom
+}
+
+func buildSimpleROM() []byte {
+	return buildSimpleROMWithResetVector(0x8000)
 }

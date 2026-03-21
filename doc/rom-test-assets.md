@@ -8,7 +8,7 @@ Quick fetch:
 ```
 
 Expected naming conventions used by suite filters:
-- nestest: filenames containing `nestest` or `cpu`
+- nestest: filenames containing `nestest` (and matching `.log` for log-compare)
 - blargg-cpu: filenames containing `blargg` and `cpu`
 - ppu: filenames containing `ppu`
 - apu: filenames containing `apu`

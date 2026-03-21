@@ -35,3 +35,23 @@
 - `go test ./...` green.
 - Docker smoke test green.
 - Public test ROM fetch script added for reproducible validation runs.
+
+## Progress Update (2026-03-14)
+- Added iNES cartridge compatibility improvements for four-screen mirroring, PRG-RAM, trainer loading, and legacy dirty-header mapper decoding.
+- Added regression tests covering those cartridge compatibility paths.
+- Added MMC5 PRG banking fixes for banked PRG-RAM and correct 16KB window decoding.
+
+## Progress Update (2026-03-20)
+- Upgraded `nestest` suite validation to use expected CPU state logs (correctness-oriented).
+- Added `blargg-cpu` suite pass/fail probing via `$6000/$6004` status reporting.
+- Added `/v1/validate/suite` support for per-ROM `expected_log_content`.
+- Updated NESTest trace runner to align CPU initial state with the first expected log line, so `tests/roms/nestest.nes + nestest.log` passes.
+- Added mid-frame `PPUCTRL`/`PPUSCROLL` split-state capture for same-scanline rendering transitions.
+- Added `owned-evidence` validation mode to collect per-ROM video/audio/runtime evidence from owned ROM directories.
+- Added `owned-evidence` checklist markdown generation (`--checklist-out`) with prioritized action items.
+- Refined `blargg-cpu` suite probing to support status protocol variants while keeping deterministic fallback for ROMs that do not expose `$6000/$6004`.
+- Added health-probe fallback checks for `ppu`/`apu`/`mapper` suites when status protocol is unavailable.
+- Improved `owned-evidence` scoring by tracking intermediate non-uniform frame observation.
+- Added adaptive extension in `owned-evidence` (uniform runs get additional frames) plus mapper hotspot reporting for triage.
+- Added uniform-color transition tracking in `owned-evidence`, reducing false WARN classification for active-but-uniform scenes.
+- Added CPU pause diagnostics (`last_cpu_error` in state + owned-evidence pause metadata) to accelerate real-ROM failure triage.

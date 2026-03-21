@@ -1,6 +1,7 @@
 package nes
 
 import (
+	"math"
 	"os"
 	"time"
 )
@@ -55,6 +56,7 @@ func (c *Console) resetLocked() {
 	c.cpu.Reset(c)
 	c.ppu.Reset()
 	c.apu.Reset()
+	c.lastCPUError = ""
 	c.lastFrameTime = time.Now()
 	c.renderFallbackFrameLocked()
 }
@@ -115,27 +117,38 @@ func (c *Console) StepFrame() {
 		c.replayCursor++
 	}
 	const cyclesPerFrame = 29780
+	const monoSamplesPerFrame = AudioRate / TargetFPS
+	samplePeriodCPU := ntscCPUHz / float64(AudioRate)
+	sampleIndex := 0
+	nextSampleAt := samplePeriodCPU
 	startCycles := c.cpu.Cycles
 	for c.cpu.Cycles-startCycles < cyclesPerFrame {
 		prevCycles := c.cpu.Cycles
+		c.beginDeferredPPUWritesLocked()
 		if err := c.cpu.Step(c); err != nil {
+			c.endDeferredPPUWritesLocked()
+			c.lastCPUError = err.Error()
 			c.paused = true
 			break
 		}
-		if c.ppu.step(c, int(c.cpu.Cycles-prevCycles)) {
-			c.cpu.NMI(c)
-		}
-		if c.cart != nil && c.cart.consumeIRQ() {
-			c.cpu.IRQ(c)
-		}
+		c.endDeferredPPUWritesLocked()
+		cpuCycles := int(c.cpu.Cycles - prevCycles)
+		c.advanceInstructionEffectsLocked(cpuCycles, startCycles, &sampleIndex, &nextSampleAt, monoSamplesPerFrame)
 	}
 	c.frameCount++
 	if c.cart != nil {
+		// Rebuild final frame from captured per-scanline state so mid-frame splits are reflected.
 		c.ppu.renderFrame(c, c.lastFrame)
+		copy(c.ppu.frameRGB, c.lastFrame)
 	} else {
 		c.renderFallbackFrameLocked()
 	}
-	c.renderAudioFromAPULocked()
+	for sampleIndex < monoSamplesPerFrame {
+		s := c.apu.Sample(c.readCPU)
+		c.audioSamples[sampleIndex*2] = s
+		c.audioSamples[sampleIndex*2+1] = s
+		sampleIndex++
+	}
 	c.lastFrameTime = time.Now()
 }
 
@@ -156,12 +169,14 @@ func (c *Console) SnapshotAudio() []int16 {
 func (c *Console) State() map[string]any {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
+	audioPeak, audioRMS, audioActive := summarizeAudio(c.audioSamples)
 	return map[string]any{
-		"paused":        c.paused,
-		"frame_count":   c.frameCount,
-		"rom_loaded":    c.cart != nil,
-		"replay_active": c.replay != nil && c.replayCursor < len(c.replay.Frames),
-		"replay_cursor": c.replayCursor,
+		"paused":         c.paused,
+		"last_cpu_error": c.lastCPUError,
+		"frame_count":    c.frameCount,
+		"rom_loaded":     c.cart != nil,
+		"replay_active":  c.replay != nil && c.replayCursor < len(c.replay.Frames),
+		"replay_cursor":  c.replayCursor,
 		"cpu": map[string]any{
 			"pc":     c.cpu.PC,
 			"a":      c.cpu.A,
@@ -179,15 +194,96 @@ func (c *Console) State() map[string]any {
 			"mask":     c.ppu.mask,
 		},
 		"apu": map[string]any{
-			"status":          c.apu.ReadStatus(),
-			"pulse1_length":   c.apu.pulse1.lengthCount,
-			"pulse1_env":      c.apu.pulse1.env.decay,
-			"triangle_length": c.apu.triangle1.lengthCount,
-			"noise_length":    c.apu.noise1.lengthCount,
-			"noise_env":       c.apu.noise1.env.decay,
-			"dmc_level":       c.apu.dmc.outputLevel,
+			"status":                 c.apu.PeekStatus(),
+			"frame_counter_cycle":    c.apu.frameCounterCycle,
+			"frame_counter_5step":    c.apu.frameCounter5Step,
+			"frame_irq":              c.apu.frameIRQ,
+			"last_write_4008":        c.apu.lastWrite4008,
+			"last_write_400b":        c.apu.lastWrite400B,
+			"last_write_4015":        c.apu.lastWrite4015,
+			"last_write_4017":        c.apu.lastWrite4017,
+			"write_count_4008":       c.apu.writeCount4008,
+			"write_count_400b":       c.apu.writeCount400B,
+			"write_count_4015":       c.apu.writeCount4015,
+			"write_count_4017":       c.apu.writeCount4017,
+			"pulse1_enabled":         c.apu.pulse1.enabled,
+			"pulse1_length":          c.apu.pulse1.lengthCount,
+			"pulse1_env":             c.apu.pulse1.env.decay,
+			"pulse1_timer":           c.apu.pulse1.timer,
+			"pulse2_enabled":         c.apu.pulse2.enabled,
+			"pulse2_length":          c.apu.pulse2.lengthCount,
+			"pulse2_env":             c.apu.pulse2.env.decay,
+			"pulse2_timer":           c.apu.pulse2.timer,
+			"triangle_enabled":       c.apu.triangle1.enabled,
+			"triangle_control":       c.apu.triangle1.control,
+			"triangle_length":        c.apu.triangle1.lengthCount,
+			"triangle_linear":        c.apu.triangle1.linearCount,
+			"triangle_linear_reload": c.apu.triangle1.linearReload,
+			"triangle_reload_flag":   c.apu.triangle1.reloadFlag,
+			"triangle_timer":         c.apu.triangle1.timer,
+			"noise_enabled":          c.apu.noise1.enabled,
+			"noise_length":           c.apu.noise1.lengthCount,
+			"noise_env":              c.apu.noise1.env.decay,
+			"noise_period":           c.apu.noise1.periodIdx,
+			"dmc_enabled":            c.apu.dmc.enabled,
+			"dmc_level":              c.apu.dmc.outputLevel,
+			"dmc_bytes":              c.apu.dmc.bytesRemain,
+		},
+		"audio": map[string]any{
+			"peak_abs":       audioPeak,
+			"rms":            audioRMS,
+			"active_samples": audioActive,
+			"sample_count":   len(c.audioSamples),
+		},
+		"controllers": map[string]any{
+			"strobe":   c.controllerStrobe,
+			"p1_shift": c.controllerShift[0],
+			"p2_shift": c.controllerShift[1],
+			"p1": map[string]any{
+				"a":      c.controllerP1.A,
+				"b":      c.controllerP1.B,
+				"select": c.controllerP1.Select,
+				"start":  c.controllerP1.Start,
+				"up":     c.controllerP1.Up,
+				"down":   c.controllerP1.Down,
+				"left":   c.controllerP1.Left,
+				"right":  c.controllerP1.Right,
+			},
+			"p2": map[string]any{
+				"a":      c.controllerP2.A,
+				"b":      c.controllerP2.B,
+				"select": c.controllerP2.Select,
+				"start":  c.controllerP2.Start,
+				"up":     c.controllerP2.Up,
+				"down":   c.controllerP2.Down,
+				"left":   c.controllerP2.Left,
+				"right":  c.controllerP2.Right,
+			},
 		},
 	}
+}
+
+func summarizeAudio(samples []int16) (int, float64, int) {
+	peak := 0
+	sumSquares := 0.0
+	active := 0
+	for _, s := range samples {
+		v := int(s)
+		if v < 0 {
+			v = -v
+		}
+		if v > peak {
+			peak = v
+		}
+		if s != 0 {
+			active++
+		}
+		sumSquares += float64(s) * float64(s)
+	}
+	if len(samples) == 0 {
+		return 0, 0, 0
+	}
+	return peak, math.Sqrt(sumSquares / float64(len(samples))), active
 }
 
 func (c *Console) SnapshotCPU() CPUState {
@@ -204,6 +300,18 @@ func (c *Console) SnapshotCPU() CPUState {
 	}
 }
 
+func (c *Console) SetCPUState(st CPUState) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.cpu.PC = st.PC
+	c.cpu.A = st.A
+	c.cpu.X = st.X
+	c.cpu.Y = st.Y
+	c.cpu.SP = st.SP
+	c.cpu.P = st.P
+	c.cpu.Cycles = st.Cycles
+}
+
 func (c *Console) StepInstruction() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -211,15 +319,83 @@ func (c *Console) StepInstruction() error {
 		return nil
 	}
 	prev := c.cpu.Cycles
+	c.beginDeferredPPUWritesLocked()
 	if err := c.cpu.Step(c); err != nil {
+		c.endDeferredPPUWritesLocked()
+		c.lastCPUError = err.Error()
 		c.paused = true
 		return err
 	}
-	if c.ppu.step(c, int(c.cpu.Cycles-prev)) {
+	c.endDeferredPPUWritesLocked()
+	cpuCycles := int(c.cpu.Cycles - prev)
+	c.advanceInstructionEffectsLocked(cpuCycles, c.cpu.Cycles, nil, nil, 0)
+	return nil
+}
+
+func (c *Console) beginDeferredPPUWritesLocked() {
+	c.deferPPUWrites = true
+	c.pendingPPUWrites = c.pendingPPUWrites[:0]
+}
+
+func (c *Console) endDeferredPPUWritesLocked() {
+	c.deferPPUWrites = false
+}
+
+func (c *Console) advanceInstructionEffectsLocked(cpuCycles int, startCycles uint64, sampleIndex *int, nextSampleAt *float64, monoSamplesPerFrame int) {
+	if cpuCycles <= 0 {
+		return
+	}
+	if len(c.pendingPPUWrites) == 0 || cpuCycles == 1 {
+		c.advanceSubsystemsLocked(cpuCycles, startCycles, sampleIndex, nextSampleAt, monoSamplesPerFrame)
+		c.applyAPUDrivenStallLocked()
+		return
+	}
+	c.advanceSubsystemsLocked(cpuCycles-1, startCycles, sampleIndex, nextSampleAt, monoSamplesPerFrame)
+	for _, write := range c.pendingPPUWrites {
+		c.ppu.cpuWriteRegister(c, write.addr, write.value)
+	}
+	c.pendingPPUWrites = c.pendingPPUWrites[:0]
+	c.advanceSubsystemsLocked(1, startCycles, sampleIndex, nextSampleAt, monoSamplesPerFrame)
+	c.applyAPUDrivenStallLocked()
+}
+
+func (c *Console) advanceSubsystemsLocked(cpuCycles int, startCycles uint64, sampleIndex *int, nextSampleAt *float64, monoSamplesPerFrame int) {
+	if cpuCycles <= 0 {
+		return
+	}
+	c.apu.StepCycles(cpuCycles, c.readCPU)
+	if c.ppu.step(c, cpuCycles) {
 		c.cpu.NMI(c)
 	}
 	if c.cart != nil && c.cart.consumeIRQ() {
 		c.cpu.IRQ(c)
 	}
-	return nil
+	if sampleIndex == nil || nextSampleAt == nil {
+		return
+	}
+	elapsed := float64(c.cpu.Cycles - startCycles)
+	for *sampleIndex < monoSamplesPerFrame && elapsed >= *nextSampleAt {
+		s := c.apu.Sample(c.readCPU)
+		c.audioSamples[*sampleIndex*2] = s
+		c.audioSamples[*sampleIndex*2+1] = s
+		*sampleIndex = *sampleIndex + 1
+		*nextSampleAt += ntscCPUHz / float64(AudioRate)
+	}
+}
+
+func (c *Console) applyAPUDrivenStallLocked() {
+	for {
+		stallCycles := c.apu.consumeCPUStallCycles()
+		if stallCycles == 0 {
+			return
+		}
+		c.cpu.Cycles += uint64(stallCycles)
+		c.apu.StepCycles(stallCycles, c.readCPU)
+		if c.ppu.step(c, stallCycles) {
+			c.cpu.NMI(c)
+		}
+		if c.cart != nil && c.cart.consumeIRQ() {
+			c.cpu.IRQ(c)
+		}
+	}
 }

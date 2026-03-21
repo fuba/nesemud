@@ -11,7 +11,7 @@ import (
 
 func TestRetroArchCommandCompatibilityForms(t *testing.T) {
 	core := nes.NewConsole()
-	s := NewServer(core, nil)
+	s := NewServer(core, nil, nil)
 
 	reqJSON := httptest.NewRequest(http.MethodPost, "/v1/retroarch/command", bytes.NewBufferString(`{"command":"PAUSE"}`))
 	recJSON := httptest.NewRecorder()
@@ -38,7 +38,7 @@ func TestRetroArchCommandCompatibilityForms(t *testing.T) {
 
 func TestRetroArchCommandList(t *testing.T) {
 	core := nes.NewConsole()
-	s := NewServer(core, nil)
+	s := NewServer(core, nil, nil)
 	req := httptest.NewRequest(http.MethodGet, "/v1/retroarch/command/list", nil)
 	rec := httptest.NewRecorder()
 	s.Handler().ServeHTTP(rec, req)

@@ -60,3 +60,66 @@ func TestCPUIllegalNOPVariantsDontError(t *testing.T) {
 		}
 	}
 }
+
+func TestCPUIllegalANCAndALR(t *testing.T) {
+	c := NewConsole()
+	cart := buildTestCartridge([]byte{
+		0xA9, 0xFF, // LDA #$FF
+		0x0B, 0x80, // ANC #$80 => A=$80, C=1
+		0x4B, 0x0F, // ALR #$0F => A=$00, C=0
+	})
+	c.cart = cart
+	c.cpu.Reset(c)
+	for i := 0; i < 3; i++ {
+		if err := c.cpu.Step(c); err != nil {
+			t.Fatalf("step %d failed: %v", i, err)
+		}
+	}
+	if c.cpu.A != 0x00 {
+		t.Fatalf("A = 0x%02X, want 0x00", c.cpu.A)
+	}
+	if c.cpu.P&flagC != 0 {
+		t.Fatalf("carry should be clear after ALR, P=0x%02X", c.cpu.P)
+	}
+}
+
+func TestCPUIllegalARRAndSBX(t *testing.T) {
+	c := NewConsole()
+	cart := buildTestCartridge([]byte{
+		0xA9, 0xFF, // LDA #$FF
+		0xAA,       // TAX
+		0x38,       // SEC
+		0x6B, 0xFF, // ARR #$FF
+		0xCB, 0x10, // SBX #$10
+	})
+	c.cart = cart
+	c.cpu.Reset(c)
+	for i := 0; i < 5; i++ {
+		if err := c.cpu.Step(c); err != nil {
+			t.Fatalf("step %d failed: %v", i, err)
+		}
+	}
+	if c.cpu.X == 0 {
+		t.Fatalf("expected SBX to change X")
+	}
+}
+
+func TestCPUIllegalStoreHighVariantsDontError(t *testing.T) {
+	c := NewConsole()
+	cart := buildTestCartridge([]byte{
+		0xA9, 0x55, // LDA #$55
+		0xA2, 0xAA, // LDX #$AA
+		0xA0, 0x11, // LDY #$11
+		0x9B, 0x34, 0x12, // TAS $1234,Y
+		0x9C, 0x00, 0x20, // SHY $2000,X
+		0x9E, 0x00, 0x20, // SHX $2000,Y
+		0x9F, 0x00, 0x20, // AHX $2000,Y
+	})
+	c.cart = cart
+	c.cpu.Reset(c)
+	for i := 0; i < 7; i++ {
+		if err := c.cpu.Step(c); err != nil {
+			t.Fatalf("step %d failed: %v", i, err)
+		}
+	}
+}

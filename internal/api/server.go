@@ -11,6 +11,8 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/pion/webrtc/v4"
+
 	"nesemud/internal/nes"
 	"nesemud/internal/streaming"
 	"nesemud/internal/validation"
@@ -30,6 +32,16 @@ type ROMLoadRequest struct {
 	ROMContentBase64 string `json:"rom_content_base64"`
 }
 
+type WebRTCOfferRequest struct {
+	Type string `json:"type"`
+	SDP  string `json:"sdp"`
+}
+
+type WebRTCAnswerResponse struct {
+	Type string `json:"type"`
+	SDP  string `json:"sdp"`
+}
+
 type FM2LoadRequest struct {
 	Path    string `json:"path,omitempty"`
 	Content string `json:"content,omitempty"`
@@ -38,12 +50,13 @@ type FM2LoadRequest struct {
 type Server struct {
 	core         *nes.Console
 	hls          *streaming.HLSStreamer
+	webrtc       *streaming.WebRTCStreamer
 	router       http.Handler
 	validationMu sync.Mutex
 }
 
-func NewServer(core *nes.Console, hls *streaming.HLSStreamer) *Server {
-	s := &Server{core: core, hls: hls}
+func NewServer(core *nes.Console, hls *streaming.HLSStreamer, webrtc *streaming.WebRTCStreamer) *Server {
+	s := &Server{core: core, hls: hls, webrtc: webrtc}
 	s.router = s.buildMux()
 	return s
 }
@@ -75,6 +88,8 @@ func (s *Server) buildMux() http.Handler {
 	mux.HandleFunc("/v1/validate/nestest", s.handleNESTestValidation)
 	mux.HandleFunc("/v1/validate/suite", s.handleSuiteValidation)
 	mux.HandleFunc("/v1/stream/stats", s.handleStreamStats)
+	mux.HandleFunc("/v1/webrtc/offer", s.handleWebRTCOffer)
+	mux.HandleFunc("/v1/webrtc/stats", s.handleWebRTCStats)
 	return mux
 }
 
@@ -405,8 +420,9 @@ func (s *Server) handleSuiteValidation(w http.ResponseWriter, r *http.Request) {
 		Suite  string `json:"suite"`
 		Frames int    `json:"frames"`
 		ROMs   []struct {
-			Name          string `json:"name"`
-			ContentBase64 string `json:"content_base64"`
+			Name               string `json:"name"`
+			ContentBase64      string `json:"content_base64"`
+			ExpectedLogContent string `json:"expected_log_content,omitempty"`
 		} `json:"roms"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -428,7 +444,11 @@ func (s *Server) handleSuiteValidation(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, fmt.Sprintf("roms[%d] invalid content_base64", i), http.StatusBadRequest)
 			return
 		}
-		roms = append(roms, validation.ROMInput{Name: r.Name, Data: b})
+		roms = append(roms, validation.ROMInput{
+			Name:               r.Name,
+			Data:               b,
+			ExpectedLogContent: r.ExpectedLogContent,
+		})
 	}
 	res, err := validation.RunSuiteByROMInputs(req.Suite, roms, req.Frames)
 	if err != nil {
@@ -449,6 +469,46 @@ func (s *Server) handleStreamStats(w http.ResponseWriter, r *http.Request) {
 	}
 	st := s.hls.Stats()
 	jsonResponse(w, http.StatusOK, st)
+}
+
+func (s *Server) handleWebRTCOffer(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if s.webrtc == nil {
+		http.Error(w, "webrtc unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	var req WebRTCOfferRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	answer, err := s.webrtc.Answer(r.Context(), webrtc.SessionDescription{
+		Type: webrtc.NewSDPType(req.Type),
+		SDP:  req.SDP,
+	})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	jsonResponse(w, http.StatusOK, WebRTCAnswerResponse{
+		Type: answer.Type.String(),
+		SDP:  answer.SDP,
+	})
+}
+
+func (s *Server) handleWebRTCStats(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if s.webrtc == nil {
+		http.Error(w, "webrtc unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	jsonResponse(w, http.StatusOK, s.webrtc.Stats())
 }
 
 func jsonResponse(w http.ResponseWriter, status int, v any) {

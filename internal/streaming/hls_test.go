@@ -1,6 +1,11 @@
 package streaming
 
-import "testing"
+import (
+	"errors"
+	"os"
+	"path/filepath"
+	"testing"
+)
 
 func TestEnqueueLatestWhenSpaceAvailable(t *testing.T) {
 	ch := make(chan []byte, 2)
@@ -24,5 +29,28 @@ func TestEnqueueLatestDropsOldestWhenFull(t *testing.T) {
 	got := <-ch
 	if len(got) != 1 || got[0] != 2 {
 		t.Fatalf("expected latest payload kept, got=%v", got)
+	}
+}
+
+func TestClearHLSOutputDirRemovesOnlyPlaylistArtifacts(t *testing.T) {
+	dir := t.TempDir()
+	for _, name := range []string{"index.m3u8", "index1.ts", "keep.txt"} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte("x"), 0o644); err != nil {
+			t.Fatalf("write %s: %v", name, err)
+		}
+	}
+
+	if err := clearHLSOutputDir(dir); err != nil {
+		t.Fatalf("clearHLSOutputDir: %v", err)
+	}
+
+	if _, err := os.Stat(filepath.Join(dir, "index.m3u8")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("index.m3u8 should be removed, err=%v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "index1.ts")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("index1.ts should be removed, err=%v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "keep.txt")); err != nil {
+		t.Fatalf("keep.txt should remain, err=%v", err)
 	}
 }

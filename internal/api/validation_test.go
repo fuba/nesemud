@@ -14,7 +14,7 @@ import (
 
 func TestReplayValidationEndpoint(t *testing.T) {
 	core := nes.NewConsole()
-	s := NewServer(core, nil)
+	s := NewServer(core, nil, nil)
 	body := map[string]any{
 		"rom_content_base64": base64.StdEncoding.EncodeToString(buildValidationROM()),
 		"frames":             10,
@@ -36,7 +36,7 @@ func TestReplayValidationEndpoint(t *testing.T) {
 func TestStreamStatsEndpoint(t *testing.T) {
 	core := nes.NewConsole()
 	hls := streaming.NewHLSStreamer()
-	s := NewServer(core, hls)
+	s := NewServer(core, hls, nil)
 	req := httptest.NewRequest(http.MethodGet, "/v1/stream/stats", nil)
 	rec := httptest.NewRecorder()
 	s.Handler().ServeHTTP(rec, req)

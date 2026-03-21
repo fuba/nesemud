@@ -1,6 +1,7 @@
 # Master Checklist to Final Completion
 
-This checklist is the source of truth. Keep implementing until all items are checked.
+This checklist is a high-level roadmap.
+For current implementation reality and known gaps, see `doc/implementation-gap-checklist-2026-03-10.md`.
 
 ## 0. Runtime / Ops
 - [x] Daemonized runtime with background launch and logfile output
@@ -21,21 +22,21 @@ This checklist is the source of truth. Keep implementing until all items are che
 - [x] NMI path connected from PPU VBlank
 - [x] Branch/page-cross cycle penalties (major paths)
 - [x] Complete all official opcodes and all addressing-mode variants
-- [x] IRQ/BRK/RTI edge-case timing validation
-- [x] Illegal opcode behavior (for high compatibility titles)
+- [ ] IRQ/BRK/RTI edge-case timing validation against conformance ROMs
+- [ ] Illegal opcode behavior and cycle timing audited against conformance ROMs
 
 ## 3. PPU
 - [x] PPU register map and VRAM/palette/OAM DMA plumbing
 - [x] Background pixel pipeline (name table + attribute + pattern decode) used for frame output
-- [x] Sprite evaluation/rendering (priority, flipping, transparency)
-- [x] Scrolling logic and timing-correct register behavior
-- [x] VBlank/NMI timing and status flag edge cases validated
+- [ ] Sprite evaluation/rendering fully audited under live mid-frame behavior
+- [ ] Scrolling logic and timing-correct register behavior validated against real split/HUD titles
+- [ ] VBlank/NMI timing and status flag edge cases validated against conformance ROMs
 
 ## 4. APU
 - [x] Pulse channel foundation integrated into output path
 - [x] Triangle/noise/DMC channel implementation
-- [x] Frame sequencer, envelopes, length/sweep units
-- [x] Mixing formula and timing accuracy validation
+- [ ] Frame sequencer, envelopes, length/sweep units audited against conformance ROMs
+- [ ] Mixing formula and timing accuracy validated against reference ROMs and real games
 
 ## 5. Mappers / Cartridge
 - [x] Mapper 0 (NROM)
@@ -43,22 +44,26 @@ This checklist is the source of truth. Keep implementing until all items are che
 - [x] Mapper 1 (MMC1)
 - [x] Mapper 3 (CNROM)
 - [x] Mapper 4 (MMC3)
-- [x] Mirroring behavior and IRQ behavior per mapper
+- [x] iNES cartridge header compatibility for four-screen mirroring, trainer loading, and PRG-RAM mapping
+- [ ] Mirroring behavior and IRQ behavior per mapper validated under real titles
+- [ ] Extended mapper set (`5/23/25/33/66/75/87/88/206`) fully audited against owned ROMs
 
 ## 6. Compatibility Validation
-- [x] nestest pass with expected CPU state log (nestest runner + API/CLI added; run with actual nestest log file)
+- [x] nestest pass with expected CPU state log
 - [x] blargg cpu test ROM suite pass
 - [x] ppu test ROM suite pass
 - [x] apu test ROM suite pass
 - [x] mapper test ROM suite pass
-- [x] FM2 deterministic replay verification on known ROM set (validation runner + deterministic hash API)
+- [ ] FM2 deterministic replay verification on known ROM set with captured evidence
 
 ## 7. Streaming Quality
 - [x] Stable HLS segment generation under daemon mode
 - [x] A/V sync quality under sustained runtime (stream stats API for drift/drop monitoring)
 - [x] Segment latency and continuity under load (stream stats API + queue/drop counters)
+- [x] WebRTC low-latency path for interactive play
+- [x] WebRTC/HLS switching in the web UI
 
 ## 8. Definition of Done
-- [x] All checklist items above are checked
-- [x] `go test ./...` green
-- [x] Docker runtime smoke test green (`/v1/state`, HLS playlist, HLS segments)
+- [ ] All checklist items above are checked
+- [ ] `go test ./...` green
+- [ ] Docker runtime smoke test green (`/v1/state`, HLS playlist, HLS segments, WebRTC path)

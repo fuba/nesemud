@@ -13,7 +13,7 @@ import (
 
 func TestROMUpload(t *testing.T) {
 	core := nes.NewConsole()
-	s := NewServer(core, nil)
+	s := NewServer(core, nil, nil)
 
 	var body bytes.Buffer
 	mw := multipart.NewWriter(&body)

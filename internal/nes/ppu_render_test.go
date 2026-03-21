@@ -21,11 +21,44 @@ func TestPPUBackgroundRenderWritesFrame(t *testing.T) {
 	// universal background color and palette entry 1.
 	c.ppu.palette[0] = 0x0F
 	c.ppu.palette[1] = 0x30
+	c.ppu.mask = 0x0A
 
 	buf := make([]byte, FrameSizeRGB)
 	c.ppu.renderFrame(c, buf)
 
 	if buf[0] == 0 && buf[1] == 0 && buf[2] == 0 {
 		t.Fatalf("expected non-black top-left pixel")
+	}
+}
+
+func TestPPUMaskGrayscaleAffectsPaletteOutput(t *testing.T) {
+	c := NewConsole()
+	c.cart = &Cartridge{
+		PRG:      make([]byte, 16*1024),
+		CHR:      make([]byte, 8*1024),
+		Mapper:   0,
+		PRGBanks: 1,
+	}
+
+	for r := 0; r < 8; r++ {
+		c.cart.CHR[r] = 0xFF
+	}
+	c.ppu.ntRAM[0] = 0
+	c.ppu.palette[1] = 0x16
+	c.ppu.mask = 0x09
+
+	buf := make([]byte, FrameSizeRGB)
+	c.ppu.renderFrame(c, buf)
+
+	if buf[0] != buf[1] || buf[1] != buf[2] {
+		t.Fatalf("expected grayscale pixel, got [%d %d %d]", buf[0], buf[1], buf[2])
+	}
+}
+
+func TestPPUMaskEmphasisChangesRGB(t *testing.T) {
+	base := applyPPUMaskRGB(0x00, [3]byte{120, 100, 80})
+	emphasis := applyPPUMaskRGB(0x20, [3]byte{120, 100, 80})
+	if base[0] == emphasis[0] && base[1] == emphasis[1] && base[2] == emphasis[2] {
+		t.Fatalf("expected emphasis to alter RGB output")
 	}
 }
