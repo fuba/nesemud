@@ -328,8 +328,8 @@ func (c *Cartridge) readPRGMapper1(addr uint16) byte {
 
 func (c *Cartridge) readPRGMapper4(addr uint16) byte {
 	num8k := max(1, len(c.PRG)/(8*1024))
-	bank6 := int(c.mmc3Regs[6]) % num8k
-	bank7 := int(c.mmc3Regs[7]) % num8k
+	bank6 := int(c.mmc3Regs[6]&0x3F) % num8k
+	bank7 := int(c.mmc3Regs[7]&0x3F) % num8k
 	last := num8k - 1
 	secondLast := max(0, num8k-2)
 	prgMode := (c.mmc3BankSelect >> 6) & 1

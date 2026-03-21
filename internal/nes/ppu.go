@@ -289,7 +289,7 @@ func (p *ppu) step(c *Console, cycles int) bool {
 			}
 		}
 		if p.cycle == 260 && c != nil && c.cart != nil && c.cart.Mapper == 4 {
-			if p.scanline < 240 || p.scanline == 261 {
+			if rendering && (p.scanline < 240 || p.scanline == 261) {
 				c.cart.mmc3ClockIRQ()
 			}
 		}
