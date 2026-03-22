@@ -42,3 +42,24 @@ func TestStepInstructionDefersPPURegisterWriteUntilFinalCPUCycle(t *testing.T) {
 		t.Fatalf("state after deferred split = 0x%04X, want 0x0001", after.vramAddr)
 	}
 }
+
+func TestStepFrameAdvancesExactlyOnePPUFramePerCall(t *testing.T) {
+	c := NewConsole()
+	c.cart = buildTestCartridge([]byte{
+		0xEA,             // NOP
+		0x4C, 0x00, 0x80, // JMP $8000
+	})
+	c.cpu.Reset(c)
+
+	var prev uint64
+	for i := 0; i < 12; i++ {
+		c.StepFrame()
+		if c.paused {
+			t.Fatalf("console paused unexpectedly at iteration %d: %s", i, c.lastCPUError)
+		}
+		if c.ppu.frameID != prev+1 {
+			t.Fatalf("ppu frame advanced by %d, want 1 (iteration %d)", c.ppu.frameID-prev, i)
+		}
+		prev = c.ppu.frameID
+	}
+}

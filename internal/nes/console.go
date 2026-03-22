@@ -116,13 +116,13 @@ func (c *Console) StepFrame() {
 		c.latchControllers()
 		c.replayCursor++
 	}
-	const cyclesPerFrame = 29780
 	const monoSamplesPerFrame = AudioRate / TargetFPS
 	samplePeriodCPU := ntscCPUHz / float64(AudioRate)
 	sampleIndex := 0
 	nextSampleAt := samplePeriodCPU
 	startCycles := c.cpu.Cycles
-	for c.cpu.Cycles-startCycles < cyclesPerFrame {
+	startPPUFrame := c.ppu.frameID
+	for c.ppu.frameID == startPPUFrame {
 		prevCycles := c.cpu.Cycles
 		c.beginDeferredPPUWritesLocked()
 		if err := c.cpu.Step(c); err != nil {
@@ -134,13 +134,14 @@ func (c *Console) StepFrame() {
 		c.endDeferredPPUWritesLocked()
 		cpuCycles := int(c.cpu.Cycles - prevCycles)
 		c.advanceInstructionEffectsLocked(cpuCycles, startCycles, &sampleIndex, &nextSampleAt, monoSamplesPerFrame)
+		if c.paused {
+			break
+		}
 	}
-	c.frameCount++
-	if c.cart != nil {
-		// Rebuild final frame from captured per-scanline state so mid-frame splits are reflected.
-		c.ppu.renderFrame(c, c.lastFrame)
-		copy(c.ppu.frameRGB, c.lastFrame)
-	} else {
+	if c.ppu.frameID != startPPUFrame {
+		c.frameCount++
+	}
+	if c.cart == nil {
 		c.renderFallbackFrameLocked()
 	}
 	for sampleIndex < monoSamplesPerFrame {
@@ -189,6 +190,7 @@ func (c *Console) State() map[string]any {
 		"ppu": map[string]any{
 			"scanline": c.ppu.scanline,
 			"cycle":    c.ppu.cycle,
+			"frame_id": c.ppu.frameID,
 			"status":   c.ppu.status,
 			"ctrl":     c.ppu.ctrl,
 			"mask":     c.ppu.mask,

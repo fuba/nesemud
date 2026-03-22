@@ -63,3 +63,7 @@
 - Connected APU frame/DMC IRQ pending state into CPU IRQ servicing path.
 - Added VRC4 (`mapper 25`) battery-backed PRG-RAM default inference when iNES byte8 is zero.
 - Re-ran full owned-ROM evidence at `--frames 240`; paused/error count reached `0` (uniform WARN backlog remains for deeper PPU/mapper audits).
+- Added PPU frame-sequence tracking (`frame_id`) and changed `StepFrame` execution to advance until exactly one PPU frame boundary per call.
+- Moved frame finalization to vblank entry (`scanline 241, cycle 1`) so vblank-time register writes cannot corrupt per-scanline render-state reconstruction.
+- Expanded per-scanline split segment capacity and kept the newest state reachable at the right edge when capacity is hit.
+- Reproduced and fixed the long-run display corruption reported on `Fushigi na Blobby`; post-fix frame dumps remain stable in title/credits/gameplay scenes.

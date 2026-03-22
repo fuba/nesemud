@@ -1,5 +1,7 @@
 package nes
 
+const maxScanlineStateSegments = 32
+
 type ppu struct {
 	ctrl        byte
 	mask        byte
@@ -15,8 +17,9 @@ type ppu struct {
 	palette     [32]byte
 	cycle       int
 	scanline    int
+	frameID     uint64
 	lineState   [FrameHeight]scanlineRenderState
-	lineSplits  [FrameHeight][8]scanlineStateSegment
+	lineSplits  [FrameHeight][maxScanlineStateSegments]scanlineStateSegment
 	lineSplitN  [FrameHeight]int
 	sprite0HitX [FrameHeight]int
 	frameRGB    []byte
@@ -55,6 +58,7 @@ func (p *ppu) Reset() {
 	p.readBuf = 0
 	p.cycle = 0
 	p.scanline = 0
+	p.frameID = 0
 	for i := range p.lineState {
 		p.lineState[i] = scanlineRenderState{}
 		p.lineSplitN[i] = 0
@@ -280,6 +284,11 @@ func (p *ppu) step(c *Console, cycles int) bool {
 					c.cart.mmc5ClockScanline()
 				}
 			case p.scanline == 241:
+				if c != nil && c.cart != nil && len(c.lastFrame) >= FrameSizeRGB {
+					// Capture completed visible frame before vblank-time register updates mutate line state.
+					p.renderFrame(c, c.lastFrame)
+					copy(p.frameRGB, c.lastFrame)
+				}
 				p.status |= 0x80
 				if p.ctrl&0x80 != 0 {
 					nmi = true
@@ -306,6 +315,7 @@ func (p *ppu) step(c *Console, cycles int) bool {
 					c.cart.mmc5EndFrame()
 				}
 				p.scanline = 0
+				p.frameID++
 			}
 		}
 	}
@@ -638,7 +648,14 @@ func (p *ppu) recordCurrentLineState(c *Console, delayPixels int) {
 	if n < len(p.lineSplits[line]) {
 		p.lineSplits[line][n] = scanlineStateSegment{startX: startX, state: st}
 		p.lineSplitN[line]++
+		return
 	}
+	// Keep the newest state reachable on the right edge even when we hit segment capacity.
+	last := len(p.lineSplits[line]) - 1
+	if startX < p.lineSplits[line][last].startX {
+		startX = p.lineSplits[line][last].startX
+	}
+	p.lineSplits[line][last] = scanlineStateSegment{startX: startX, state: st}
 }
 
 func (p *ppu) captureState(c *Console) scanlineRenderState {
