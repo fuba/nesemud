@@ -81,3 +81,55 @@ func TestFourScreenMirroringKeepsNametablesDistinct(t *testing.T) {
 		t.Fatalf("table 3 read = 0x%02X, want 0x44", got)
 	}
 }
+
+func TestMapper4PRGRAMRequiresEnableBit(t *testing.T) {
+	c := NewConsole()
+	c.cart = &Cartridge{
+		PRG:              make([]byte, 4*16*1024),
+		CHR:              make([]byte, 8*1024),
+		PRGRAM:           make([]byte, 8*1024),
+		Mapper:           4,
+		PRGBanks:         4,
+		CHRBanks:         1,
+		mirroring:        MirroringHorizontal,
+		mmc3PRGRAMEnable: false,
+		mmc3PRGWriteDeny: false,
+	}
+
+	c.writeCPU(0x6000, 0x77)
+	if got := c.readCPU(0x6000); got != 0x00 {
+		t.Fatalf("disabled mapper4 PRG-RAM read = 0x%02X, want 0x00", got)
+	}
+
+	c.writeCPU(0xA001, 0x80)
+	c.writeCPU(0x6000, 0x77)
+	if got := c.readCPU(0x6000); got != 0x77 {
+		t.Fatalf("enabled mapper4 PRG-RAM read = 0x%02X, want 0x77", got)
+	}
+}
+
+func TestMapper4PRGRAMWriteProtectBitBlocksWrites(t *testing.T) {
+	c := NewConsole()
+	c.cart = &Cartridge{
+		PRG:              make([]byte, 4*16*1024),
+		CHR:              make([]byte, 8*1024),
+		PRGRAM:           make([]byte, 8*1024),
+		Mapper:           4,
+		PRGBanks:         4,
+		CHRBanks:         1,
+		mirroring:        MirroringHorizontal,
+		mmc3PRGRAMEnable: true,
+		mmc3PRGWriteDeny: false,
+	}
+
+	c.writeCPU(0x6000, 0x11)
+	if got := c.readCPU(0x6000); got != 0x11 {
+		t.Fatalf("baseline mapper4 PRG-RAM read = 0x%02X, want 0x11", got)
+	}
+
+	c.writeCPU(0xA001, 0xC0)
+	c.writeCPU(0x6000, 0x22)
+	if got := c.readCPU(0x6000); got != 0x11 {
+		t.Fatalf("write-protected mapper4 PRG-RAM read = 0x%02X, want 0x11", got)
+	}
+}

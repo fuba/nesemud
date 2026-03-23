@@ -96,6 +96,10 @@ func LoadINES(data []byte) (*Cartridge, error) {
 		num8k := max(1, len(cart.PRG)/(8*1024))
 		cart.mmc5PRGBank[4] = byte(num8k - 1)
 	}
+	if mapper == 4 {
+		cart.mmc3PRGRAMEnable = true
+		cart.mmc3PRGWriteDeny = false
+	}
 	return cart, nil
 }
 
@@ -444,8 +448,8 @@ func (c *Cartridge) readPRGMapper206(addr uint16) byte {
 	num8k := max(1, len(c.PRG)/(8*1024))
 	last := num8k - 1
 	secondLast := max(0, num8k-2)
-	bank6 := int(c.mmc3Regs[6] & 0x3F % byte(num8k))
-	bank7 := int(c.mmc3Regs[7] & 0x3F % byte(num8k))
+	bank6 := int(c.mmc3Regs[6]&0x3F) % num8k
+	bank7 := int(c.mmc3Regs[7]&0x3F) % num8k
 	var bank int
 	switch {
 	case addr < 0xA000:
@@ -842,11 +846,24 @@ func (c *Cartridge) readPRGRAM(addr uint16) byte {
 	if len(c.PRGRAM) == 0 {
 		return 0
 	}
+	if c.Mapper == 4 && !c.mmc3PRGRAMEnable {
+		return 0
+	}
 	return c.PRGRAM[int(addr-0x6000)%len(c.PRGRAM)]
 }
 
 func (c *Cartridge) writePRGRAM(addr uint16, value byte) {
 	if c.Mapper != 5 {
+		if c.Mapper == 4 {
+			if len(c.PRGRAM) == 0 {
+				return
+			}
+			if !c.mmc3PRGRAMEnable || c.mmc3PRGWriteDeny {
+				return
+			}
+			c.PRGRAM[int(addr-0x6000)%len(c.PRGRAM)] = value
+			return
+		}
 		if c.Mapper == 87 {
 			c.writePRG(addr, value)
 			return
@@ -1040,6 +1057,9 @@ func (c *Cartridge) mmc3Write(addr uint16, value byte) {
 			} else {
 				c.mirroring = MirroringHorizontal
 			}
+		} else {
+			c.mmc3PRGRAMEnable = value&0x80 != 0
+			c.mmc3PRGWriteDeny = value&0x40 != 0
 		}
 	case addr >= 0xC000 && addr <= 0xDFFF:
 		if addr&1 == 0 {

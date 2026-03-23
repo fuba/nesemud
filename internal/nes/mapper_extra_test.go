@@ -208,6 +208,29 @@ func TestMapper206PRGAndCHRBankSwitch(t *testing.T) {
 	}
 }
 
+func TestMapper206PRGBankSelectionUsesModuloBankCount(t *testing.T) {
+	c := NewConsole()
+	prg := make([]byte, 6*8*1024)
+	for b := 0; b < 6; b++ {
+		for i := 0; i < 8*1024; i++ {
+			prg[b*8*1024+i] = byte(0x70 + b)
+		}
+	}
+	c.cart = &Cartridge{
+		PRG:      prg,
+		CHR:      make([]byte, 8*1024),
+		Mapper:   206,
+		PRGBanks: 3,
+		CHRBanks: 1,
+	}
+
+	c.writeCPU(0x8000, 0x06)
+	c.writeCPU(0x8001, 0x05)
+	if got := c.readCPU(0x8000); got != 0x75 {
+		t.Fatalf("mapper206 prg modulo bank select read=0x%02X, want 0x75", got)
+	}
+}
+
 func TestMapper23PRGCHRMirroringAndIRQ(t *testing.T) {
 	c := NewConsole()
 	prg := make([]byte, 8*8*1024)

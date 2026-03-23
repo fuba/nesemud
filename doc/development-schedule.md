@@ -67,3 +67,10 @@
 - Moved frame finalization to vblank entry (`scanline 241, cycle 1`) so vblank-time register writes cannot corrupt per-scanline render-state reconstruction.
 - Expanded per-scanline split segment capacity and kept the newest state reachable at the right edge when capacity is hit.
 - Reproduced and fixed the long-run display corruption reported on `Fushigi na Blobby`; post-fix frame dumps remain stable in title/credits/gameplay scenes.
+
+## Progress Update (2026-03-23)
+- Added MMC3 PRG-RAM control handling (`$A001` odd): enable + write-protect semantics are now enforced on mapper4 `$6000-$7FFF` accesses.
+- Added mapper4 PRG-RAM protection regression tests for enable-required reads and write-protect behavior.
+- Fixed mapper206 PRG bank selection math to use modulo over actual 8KiB bank count (correct behavior for non-power-of-two bank counts).
+- Added mapper206 regression coverage for modulo-based PRG bank selection.
+- Re-ran owned-ROM evidence (`--frames 240`): paused/error remains `0`, with `4` uniform-stuck titles still queued for deeper PPU/NMI/mapper investigation.
