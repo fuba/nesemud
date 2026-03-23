@@ -25,3 +25,16 @@
 
 ## Notes
 - A mapper4 battery-RAM default inference trial was evaluated but reverted in this phase due Kirby regression (early invalid-opcode trap path). The current branch keeps behavior stable while preserving the new MMC3 PRG-RAM control correctness and mapper206 bank math fix.
+
+## Follow-up (same day): NMI Timing/Clocking Alignment
+- Adjusted NMI delivery to be queued with one-instruction latency (`nmiPending` + `nmiDelayInstr`) instead of being injected in the same post-instruction phase that observed vblank.
+- Ensured IRQ entry cycles are always propagated into PPU/APU stepping and audio sample scheduling (interrupt entry no longer advances CPU cycles alone).
+- Added regression tests:
+  - `TestStepInstructionAdvancesSubsystemsDuringNMIEntryCycles`
+  - `TestStepInstructionAdvancesSubsystemsDuringIRQEntryCycles`
+- Re-ran `owned-evidence` at `--frames 240`:
+  - paused/error: `0`
+  - uniform-stuck backlog improved from `4` to `3`
+    - `Hoshi no Kirby - Yume no Izumi no Monogatari (Japan).nes`
+    - `Racer Mini Yonku - Japan Cup (Japan).nes`
+    - `Wario no Mori (Japan).nes`

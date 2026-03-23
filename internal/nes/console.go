@@ -57,6 +57,8 @@ func (c *Console) resetLocked() {
 	c.ppu.Reset()
 	c.apu.Reset()
 	c.lastCPUError = ""
+	c.nmiPending = false
+	c.nmiDelayInstr = 0
 	c.lastFrameTime = time.Now()
 	c.renderFallbackFrameLocked()
 }
@@ -123,6 +125,7 @@ func (c *Console) StepFrame() {
 	startCycles := c.cpu.Cycles
 	startPPUFrame := c.ppu.frameID
 	for c.ppu.frameID == startPPUFrame {
+		c.serviceQueuedNMIIfReadyLocked(startCycles, &sampleIndex, &nextSampleAt, monoSamplesPerFrame)
 		prevCycles := c.cpu.Cycles
 		c.beginDeferredPPUWritesLocked()
 		if err := c.cpu.Step(c); err != nil {
@@ -320,6 +323,7 @@ func (c *Console) StepInstruction() error {
 	if c.paused {
 		return nil
 	}
+	c.serviceQueuedNMIIfReadyLocked(c.cpu.Cycles, nil, nil, 0)
 	prev := c.cpu.Cycles
 	c.beginDeferredPPUWritesLocked()
 	if err := c.cpu.Step(c); err != nil {
@@ -367,10 +371,10 @@ func (c *Console) advanceSubsystemsLocked(cpuCycles int, startCycles uint64, sam
 	}
 	c.apu.StepCycles(cpuCycles, c.readCPU)
 	if c.ppu.step(c, cpuCycles) {
-		c.cpu.NMI(c)
+		c.queueNMIInterruptLocked()
 	}
 	if (c.cart != nil && c.cart.irqPending()) || c.apu.irqPending() {
-		c.cpu.IRQ(c)
+		c.serviceIRQInterruptLocked(startCycles, sampleIndex, nextSampleAt, monoSamplesPerFrame)
 	}
 	if sampleIndex == nil || nextSampleAt == nil {
 		return
@@ -394,10 +398,60 @@ func (c *Console) applyAPUDrivenStallLocked() {
 		c.cpu.Cycles += uint64(stallCycles)
 		c.apu.StepCycles(stallCycles, c.readCPU)
 		if c.ppu.step(c, stallCycles) {
-			c.cpu.NMI(c)
+			c.queueNMIInterruptLocked()
 		}
 		if (c.cart != nil && c.cart.irqPending()) || c.apu.irqPending() {
-			c.cpu.IRQ(c)
+			c.serviceIRQInterruptLocked(0, nil, nil, 0)
 		}
+	}
+}
+
+func (c *Console) serviceNMIInterruptLocked(startCycles uint64, sampleIndex *int, nextSampleAt *float64, monoSamplesPerFrame int) {
+	prevCycles := c.cpu.Cycles
+	c.cpu.NMI(c)
+	c.advanceInterruptEntryCyclesLocked(int(c.cpu.Cycles-prevCycles), startCycles, sampleIndex, nextSampleAt, monoSamplesPerFrame)
+}
+
+func (c *Console) serviceIRQInterruptLocked(startCycles uint64, sampleIndex *int, nextSampleAt *float64, monoSamplesPerFrame int) {
+	prevCycles := c.cpu.Cycles
+	c.cpu.IRQ(c)
+	c.advanceInterruptEntryCyclesLocked(int(c.cpu.Cycles-prevCycles), startCycles, sampleIndex, nextSampleAt, monoSamplesPerFrame)
+}
+
+func (c *Console) queueNMIInterruptLocked() {
+	c.nmiPending = true
+	if c.nmiDelayInstr < 1 {
+		c.nmiDelayInstr = 1
+	}
+}
+
+func (c *Console) serviceQueuedNMIIfReadyLocked(startCycles uint64, sampleIndex *int, nextSampleAt *float64, monoSamplesPerFrame int) {
+	if !c.nmiPending {
+		return
+	}
+	if c.nmiDelayInstr > 0 {
+		c.nmiDelayInstr--
+		return
+	}
+	c.nmiPending = false
+	c.serviceNMIInterruptLocked(startCycles, sampleIndex, nextSampleAt, monoSamplesPerFrame)
+}
+
+func (c *Console) advanceInterruptEntryCyclesLocked(cpuCycles int, startCycles uint64, sampleIndex *int, nextSampleAt *float64, monoSamplesPerFrame int) {
+	if cpuCycles <= 0 {
+		return
+	}
+	c.apu.StepCycles(cpuCycles, c.readCPU)
+	_ = c.ppu.step(c, cpuCycles)
+	if sampleIndex == nil || nextSampleAt == nil {
+		return
+	}
+	elapsed := float64(c.cpu.Cycles - startCycles)
+	for *sampleIndex < monoSamplesPerFrame && elapsed >= *nextSampleAt {
+		s := c.apu.Sample(c.readCPU)
+		c.audioSamples[*sampleIndex*2] = s
+		c.audioSamples[*sampleIndex*2+1] = s
+		*sampleIndex = *sampleIndex + 1
+		*nextSampleAt += ntscCPUHz / float64(AudioRate)
 	}
 }

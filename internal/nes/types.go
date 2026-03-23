@@ -180,6 +180,8 @@ type Console struct {
 	replayCursor     int
 	lastFrameTime    time.Time
 	lastCPUError     string
+	nmiPending       bool
+	nmiDelayInstr    int
 }
 
 type CPUState struct {

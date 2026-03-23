@@ -73,4 +73,8 @@
 - Added mapper4 PRG-RAM protection regression tests for enable-required reads and write-protect behavior.
 - Fixed mapper206 PRG bank selection math to use modulo over actual 8KiB bank count (correct behavior for non-power-of-two bank counts).
 - Added mapper206 regression coverage for modulo-based PRG bank selection.
-- Re-ran owned-ROM evidence (`--frames 240`): paused/error remains `0`, with `4` uniform-stuck titles still queued for deeper PPU/NMI/mapper investigation.
+- Aligned interrupt timing/clocking:
+  - NMI is now queued with one-instruction latency instead of immediate post-step injection.
+  - IRQ/NMI entry cycles are now propagated to PPU/APU/audio advancement (no more CPU-only cycle jumps).
+- Added interrupt-entry timing regressions for both NMI and IRQ paths.
+- Re-ran owned-ROM evidence (`--frames 240`): paused/error remains `0`, and uniform-stuck backlog reduced from `4` to `3` (`Donald Land` cleared).
