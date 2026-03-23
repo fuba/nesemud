@@ -7,7 +7,7 @@ import (
 
 func TestStateIncludesLastCPUErrorWhenPaused(t *testing.T) {
 	c := NewConsole()
-	c.cart = buildTestCartridge([]byte{0x02}) // Unsupported opcode.
+	c.cart = buildTestCartridge([]byte{0x8B}) // Unsupported opcode.
 	c.cpu.Reset(c)
 
 	err := c.StepInstruction()

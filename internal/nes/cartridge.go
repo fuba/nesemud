@@ -132,6 +132,11 @@ func inferINESPRGRAMSize(byte8 byte, mapper byte, hasBattery bool, hasTrainer bo
 	switch mapper {
 	case 1, 5:
 		return 8 * 1024
+	case 4:
+		if hasBattery {
+			return 8 * 1024
+		}
+		return 0
 	case 23, 25:
 		if hasBattery {
 			return 8 * 1024
@@ -735,6 +740,10 @@ func (c *Cartridge) vrcWrite(addr uint16, value byte) {
 		}
 		c.vrcIRQPending = false
 	case 0xF002:
+		c.vrcIRQEnable = c.vrcIRQEnableAck
+		c.vrcIRQPending = false
+		c.vrcIRQPrescaler = 341
+	case 0xF003:
 		c.vrcIRQEnable = c.vrcIRQEnableAck
 		c.vrcIRQPending = false
 		c.vrcIRQPrescaler = 341

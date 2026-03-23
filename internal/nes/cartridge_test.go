@@ -93,6 +93,25 @@ func TestLoadINESMapper25BatteryDefaultsPRGRAMTo8KiB(t *testing.T) {
 	}
 }
 
+func TestLoadINESMapper4BatteryDefaultsPRGRAMTo8KiB(t *testing.T) {
+	header := []byte{'N', 'E', 'S', 0x1A, 16, 32, 0x42, 0x00, 0x00, 0, 0, 0, 0, 0, 0, 0}
+	prg := make([]byte, 16*16*1024)
+	chr := make([]byte, 32*8*1024)
+	rom := append(header, prg...)
+	rom = append(rom, chr...)
+
+	cart, err := LoadINES(rom)
+	if err != nil {
+		t.Fatalf("LoadINES returned error: %v", err)
+	}
+	if cart.Mapper != 4 {
+		t.Fatalf("expected mapper 4, got %d", cart.Mapper)
+	}
+	if got := len(cart.PRGRAM); got != 8*1024 {
+		t.Fatalf("expected mapper4 battery default 8KiB PRG-RAM, got %d bytes", got)
+	}
+}
+
 func TestLoadINESLegacyDirtyHeaderMasksMapperHighNibble(t *testing.T) {
 	header := []byte{'N', 'E', 'S', 0x1A, 1, 1, 0x10, 0x40, 0, 0, 0, 0, 'D', 'u', 'd', 'e'}
 	prg := make([]byte, 16*1024)

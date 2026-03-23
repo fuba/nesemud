@@ -78,3 +78,10 @@
   - IRQ/NMI entry cycles are now propagated to PPU/APU/audio advancement (no more CPU-only cycle jumps).
 - Added interrupt-entry timing regressions for both NMI and IRQ paths.
 - Re-ran owned-ROM evidence (`--frames 240`): paused/error remains `0`, and uniform-stuck backlog reduced from `4` to `3` (`Donald Land` cleared).
+
+## Progress Update (2026-03-24)
+- Added mapper4 battery-backed PRG-RAM default inference (`byte8=0` now defaults to 8KiB when battery is present).
+- Added illegal opcode alias support for `0xEB` (`USBC/SBC #imm`) and regression coverage.
+- Fixed VRC IRQ ACK handling at `$F003` and added mapper25 regression coverage.
+- Added KIL/JAM compatibility fallback (`0x02/0x12/.../0xF2`) as inert 1-byte NOPs to avoid hard-stop traps in owned ROM flows.
+- Re-ran owned-ROM evidence (`--frames 240`): action-item backlog reduced from `3` to `1` (remaining: `Hoshi no Kirby - Yume no Izumi no Monogatari (Japan).nes`).

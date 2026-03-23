@@ -299,6 +299,28 @@ func TestMapper25PRGCHRSwitch(t *testing.T) {
 	}
 }
 
+func TestMapper25IRQAckViaF003ClearsPending(t *testing.T) {
+	c := NewConsole()
+	c.cart = &Cartridge{
+		PRG:      make([]byte, 4*16*1024),
+		CHR:      make([]byte, 8*1024),
+		Mapper:   25,
+		PRGBanks: 4,
+		CHRBanks: 1,
+	}
+	c.cart.vrcIRQEnableAck = false
+	c.cart.vrcIRQEnable = true
+	c.cart.vrcIRQPending = true
+
+	c.writeCPU(0xF003, 0x00)
+	if c.cart.vrcIRQPending {
+		t.Fatalf("expected mapper25 IRQ pending to clear on $F003 ACK")
+	}
+	if c.cart.vrcIRQEnable {
+		t.Fatalf("expected mapper25 IRQ enable to follow ack latch (false)")
+	}
+}
+
 func TestMapper5PRGCHRSwitchAndFillNametable(t *testing.T) {
 	c := NewConsole()
 	prg := make([]byte, 8*8*1024)
