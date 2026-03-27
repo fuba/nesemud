@@ -248,6 +248,10 @@ func (p *ppu) step(c *Console, cycles int) bool {
 	for i := 0; i < cycles*3; i++ {
 		p.cycle++
 		rendering := p.mask&0x18 != 0
+		if p.shouldSkipOddFrameDot(rendering) {
+			p.startNextFrame(c)
+			continue
+		}
 		if p.scanline < 240 && p.cycle == 1 {
 			start := p.scanline * FrameWidth
 			end := start + FrameWidth
@@ -311,15 +315,24 @@ func (p *ppu) step(c *Console, cycles int) bool {
 			p.cycle = 0
 			p.scanline++
 			if p.scanline >= 262 {
-				if c != nil && c.cart != nil && c.cart.Mapper == 5 {
-					c.cart.mmc5EndFrame()
-				}
-				p.scanline = 0
-				p.frameID++
+				p.startNextFrame(c)
 			}
 		}
 	}
 	return nmi
+}
+
+func (p *ppu) shouldSkipOddFrameDot(rendering bool) bool {
+	return rendering && p.scanline == 261 && p.cycle == 340 && p.frameID%2 == 1
+}
+
+func (p *ppu) startNextFrame(c *Console) {
+	if c != nil && c.cart != nil && c.cart.Mapper == 5 {
+		c.cart.mmc5EndFrame()
+	}
+	p.scanline = 0
+	p.cycle = 0
+	p.frameID++
 }
 
 func (p *ppu) renderFrame(c *Console, dst []byte) {

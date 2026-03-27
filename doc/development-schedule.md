@@ -85,3 +85,9 @@
 - Fixed VRC IRQ ACK handling at `$F003` and added mapper25 regression coverage.
 - Added KIL/JAM compatibility fallback (`0x02/0x12/.../0xF2`) as inert 1-byte NOPs to avoid hard-stop traps in owned ROM flows.
 - Re-ran owned-ROM evidence (`--frames 240`): action-item backlog reduced from `3` to `1` (remaining: `Hoshi no Kirby - Yume no Izumi no Monogatari (Japan).nes`).
+
+## Progress Update (2026-03-28)
+- Implemented PPU odd-frame pre-render dot skip timing (`scanline 261`, odd frame, rendering enabled).
+- Added regression tests to verify skip behavior is applied only when rendering is enabled.
+- Re-ran full test suite (`go test ./...`) and owned-ROM evidence (`--frames 240`) with no new regressions.
+- Action-item backlog remains `1` (remaining: `Hoshi no Kirby - Yume no Izumi no Monogatari (Japan).nes`).
