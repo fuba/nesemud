@@ -89,5 +89,7 @@
 ## Progress Update (2026-03-28)
 - Implemented PPU odd-frame pre-render dot skip timing (`scanline 261`, odd frame, rendering enabled).
 - Added regression tests to verify skip behavior is applied only when rendering is enabled.
+- Removed per-frame background-opaque buffer allocation in `renderFrame` by reusing and clearing `ppu.frameBGOpaq`.
+- Added regression coverage to ensure stale per-frame opaque state cannot hide behind-background sprites.
 - Re-ran full test suite (`go test ./...`) and owned-ROM evidence (`--frames 240`) with no new regressions.
 - Action-item backlog remains `1` (remaining: `Hoshi no Kirby - Yume no Izumi no Monogatari (Japan).nes`).

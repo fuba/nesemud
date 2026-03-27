@@ -339,7 +339,10 @@ func (p *ppu) renderFrame(c *Console, dst []byte) {
 	if len(dst) < FrameSizeRGB {
 		return
 	}
-	bgOpaque := make([]bool, FrameWidth*FrameHeight)
+	bgOpaque := p.frameBGOpaq
+	for i := range bgOpaque {
+		bgOpaque[i] = false
+	}
 	for y := 0; y < FrameHeight; y++ {
 		state, segmentStartX := p.renderSegmentForPixel(c, y, 0)
 		showBG := state.mask&0x08 != 0
