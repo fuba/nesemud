@@ -302,7 +302,7 @@ func (p *ppu) step(c *Console, cycles int) bool {
 			}
 		}
 		if p.cycle == 260 && c != nil && c.cart != nil && c.cart.Mapper == 4 {
-			if rendering && (p.scanline < 240 || p.scanline == 261) {
+			if p.shouldClockMMC3IRQ(rendering) {
 				c.cart.mmc3ClockIRQ()
 			}
 		}
@@ -324,6 +324,26 @@ func (p *ppu) step(c *Console, cycles int) bool {
 
 func (p *ppu) shouldSkipOddFrameDot(rendering bool) bool {
 	return rendering && p.scanline == 261 && p.cycle == 340 && p.frameID%2 == 1
+}
+
+func (p *ppu) shouldClockMMC3IRQ(rendering bool) bool {
+	if !rendering {
+		return false
+	}
+	if p.scanline >= 240 && p.scanline != 261 {
+		return false
+	}
+	bgFetchHigh := p.mask&0x08 != 0 && p.ctrl&0x10 != 0
+	if bgFetchHigh {
+		return true
+	}
+	if p.mask&0x10 == 0 {
+		return false
+	}
+	if p.ctrl&0x20 != 0 {
+		return true
+	}
+	return p.ctrl&0x08 != 0
 }
 
 func (p *ppu) startNextFrame(c *Console) {

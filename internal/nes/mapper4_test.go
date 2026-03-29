@@ -64,10 +64,27 @@ func TestMapper4IRQClockedWhenRenderingEnabled(t *testing.T) {
 	c.cart.mmc3Write(0xE001, 0x00)
 
 	c.ppu.mask = 0x18 // enable background + sprites
+	c.ppu.ctrl = 0x10 // background pattern table at $1000 (A12 high fetches)
 	c.ppu.step(c, 114)
 
 	if !c.cart.consumeIRQ() {
 		t.Fatalf("expected IRQ when rendering is enabled")
+	}
+}
+
+func TestMapper4IRQNotClockedWhenPatternFetchesStayBelow1000(t *testing.T) {
+	c := NewConsole()
+	c.cart = &Cartridge{Mapper: 4}
+	c.cart.mmc3Write(0xC000, 0x00)
+	c.cart.mmc3Write(0xC001, 0x00)
+	c.cart.mmc3Write(0xE001, 0x00)
+
+	c.ppu.mask = 0x18 // rendering enabled
+	c.ppu.ctrl = 0x00 // bg/sprite pattern tables at $0000 in 8x8 mode
+	c.ppu.step(c, 114)
+
+	if c.cart.consumeIRQ() {
+		t.Fatalf("did not expect IRQ without A12-high pattern fetches")
 	}
 }
 

@@ -59,6 +59,7 @@ func (c *Console) resetLocked() {
 	c.lastCPUError = ""
 	c.nmiPending = false
 	c.nmiDelayInstr = 0
+	c.irqDelayInstr = 0
 	c.lastFrameTime = time.Now()
 	c.renderFallbackFrameLocked()
 }
@@ -127,6 +128,7 @@ func (c *Console) StepFrame() {
 	for c.ppu.frameID == startPPUFrame {
 		c.serviceQueuedNMIIfReadyLocked(startCycles, &sampleIndex, &nextSampleAt, monoSamplesPerFrame)
 		prevCycles := c.cpu.Cycles
+		prevP := c.cpu.P
 		c.beginDeferredPPUWritesLocked()
 		if err := c.cpu.Step(c); err != nil {
 			c.endDeferredPPUWritesLocked()
@@ -135,8 +137,10 @@ func (c *Console) StepFrame() {
 			break
 		}
 		c.endDeferredPPUWritesLocked()
+		c.noteIRQUnmaskByInstructionLocked(prevP)
 		cpuCycles := int(c.cpu.Cycles - prevCycles)
 		c.advanceInstructionEffectsLocked(cpuCycles, startCycles, &sampleIndex, &nextSampleAt, monoSamplesPerFrame)
+		c.finishInstructionBoundaryLocked()
 		if c.paused {
 			break
 		}
@@ -325,6 +329,7 @@ func (c *Console) StepInstruction() error {
 	}
 	c.serviceQueuedNMIIfReadyLocked(c.cpu.Cycles, nil, nil, 0)
 	prev := c.cpu.Cycles
+	prevP := c.cpu.P
 	c.beginDeferredPPUWritesLocked()
 	if err := c.cpu.Step(c); err != nil {
 		c.endDeferredPPUWritesLocked()
@@ -333,8 +338,10 @@ func (c *Console) StepInstruction() error {
 		return err
 	}
 	c.endDeferredPPUWritesLocked()
+	c.noteIRQUnmaskByInstructionLocked(prevP)
 	cpuCycles := int(c.cpu.Cycles - prev)
 	c.advanceInstructionEffectsLocked(cpuCycles, c.cpu.Cycles, nil, nil, 0)
+	c.finishInstructionBoundaryLocked()
 	return nil
 }
 
@@ -374,7 +381,7 @@ func (c *Console) advanceSubsystemsLocked(cpuCycles int, startCycles uint64, sam
 		c.queueNMIInterruptLocked()
 	}
 	if (c.cart != nil && c.cart.irqPending()) || c.apu.irqPending() {
-		c.serviceIRQInterruptLocked(startCycles, sampleIndex, nextSampleAt, monoSamplesPerFrame)
+		c.serviceQueuedIRQIfReadyLocked(startCycles, sampleIndex, nextSampleAt, monoSamplesPerFrame)
 	}
 	if sampleIndex == nil || nextSampleAt == nil {
 		return
@@ -401,7 +408,7 @@ func (c *Console) applyAPUDrivenStallLocked() {
 			c.queueNMIInterruptLocked()
 		}
 		if (c.cart != nil && c.cart.irqPending()) || c.apu.irqPending() {
-			c.serviceIRQInterruptLocked(0, nil, nil, 0)
+			c.serviceQueuedIRQIfReadyLocked(0, nil, nil, 0)
 		}
 	}
 }
@@ -435,6 +442,28 @@ func (c *Console) serviceQueuedNMIIfReadyLocked(startCycles uint64, sampleIndex 
 	}
 	c.nmiPending = false
 	c.serviceNMIInterruptLocked(startCycles, sampleIndex, nextSampleAt, monoSamplesPerFrame)
+}
+
+func (c *Console) serviceQueuedIRQIfReadyLocked(startCycles uint64, sampleIndex *int, nextSampleAt *float64, monoSamplesPerFrame int) {
+	if c.irqDelayInstr > 0 {
+		return
+	}
+	c.serviceIRQInterruptLocked(startCycles, sampleIndex, nextSampleAt, monoSamplesPerFrame)
+}
+
+func (c *Console) noteIRQUnmaskByInstructionLocked(prevP byte) {
+	if prevP&flagI == 0 || c.cpu.P&flagI != 0 {
+		return
+	}
+	if c.irqDelayInstr < 1 {
+		c.irqDelayInstr = 1
+	}
+}
+
+func (c *Console) finishInstructionBoundaryLocked() {
+	if c.irqDelayInstr > 0 {
+		c.irqDelayInstr--
+	}
 }
 
 func (c *Console) advanceInterruptEntryCyclesLocked(cpuCycles int, startCycles uint64, sampleIndex *int, nextSampleAt *float64, monoSamplesPerFrame int) {

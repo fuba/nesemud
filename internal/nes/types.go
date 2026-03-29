@@ -182,6 +182,7 @@ type Console struct {
 	lastCPUError     string
 	nmiPending       bool
 	nmiDelayInstr    int
+	irqDelayInstr    int
 }
 
 type CPUState struct {

@@ -93,3 +93,10 @@
 - Added regression coverage to ensure stale per-frame opaque state cannot hide behind-background sprites.
 - Re-ran full test suite (`go test ./...`) and owned-ROM evidence (`--frames 240`) with no new regressions.
 - Action-item backlog remains `1` (remaining: `Hoshi no Kirby - Yume no Izumi no Monogatari (Japan).nes`).
+
+## Progress Update (2026-03-30)
+- Added IRQ edge handling for instruction-level unmask transitions (`I:1 -> 0` now defers pending IRQ servicing by one instruction boundary).
+- Added regression coverage for delayed IRQ after `CLI` and non-delayed IRQ when interrupts were already enabled.
+- Refined MMC3 IRQ clock gating to require A12-high fetch-capable rendering conditions instead of unconditional per-scanline clocking.
+- Added mapper4 regression coverage for "no IRQ when pattern fetches remain below `$1000`".
+- Re-ran full test suite and owned-ROM evidence (`--frames 240`); backlog remains `1` (`Hoshi no Kirby - Yume no Izumi no Monogatari (Japan).nes` still uniform).
