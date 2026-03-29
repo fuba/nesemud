@@ -21,3 +21,6 @@
 - `go run ./cmd/nes-validate --suite owned-evidence --rom-dir ./dont_upload_roms --frames 240` re-run completed.
   - Action items remain `1` (`Hoshi no Kirby - Yume no Izumi no Monogatari (Japan).nes` still uniform with `PC=0x0029`).
 
+## Kirby trace note
+- Direct instruction trace on the local Kirby ROM shows control eventually returns to `PC=0x0000`, executes `BRK` (`0x00`), and then loops through the ROM IRQ/BRK vector at `0x0029`.
+- This indicates the remaining issue is still on execution-path correctness before the BRK loop (not a direct unsupported-opcode halt).
