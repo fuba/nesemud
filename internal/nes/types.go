@@ -183,6 +183,7 @@ type Console struct {
 	nmiPending       bool
 	nmiDelayInstr    int
 	irqDelayInstr    int
+	irqMaskLatency   int
 }
 
 type CPUState struct {

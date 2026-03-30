@@ -60,6 +60,7 @@ func (c *Console) resetLocked() {
 	c.nmiPending = false
 	c.nmiDelayInstr = 0
 	c.irqDelayInstr = 0
+	c.irqMaskLatency = 0
 	c.lastFrameTime = time.Now()
 	c.renderFallbackFrameLocked()
 }
@@ -137,7 +138,7 @@ func (c *Console) StepFrame() {
 			break
 		}
 		c.endDeferredPPUWritesLocked()
-		c.noteIRQUnmaskByInstructionLocked(prevP)
+		c.noteIRQMaskTransitionsLocked(prevP)
 		cpuCycles := int(c.cpu.Cycles - prevCycles)
 		c.advanceInstructionEffectsLocked(cpuCycles, startCycles, &sampleIndex, &nextSampleAt, monoSamplesPerFrame)
 		c.finishInstructionBoundaryLocked()
@@ -338,7 +339,7 @@ func (c *Console) StepInstruction() error {
 		return err
 	}
 	c.endDeferredPPUWritesLocked()
-	c.noteIRQUnmaskByInstructionLocked(prevP)
+	c.noteIRQMaskTransitionsLocked(prevP)
 	cpuCycles := int(c.cpu.Cycles - prev)
 	c.advanceInstructionEffectsLocked(cpuCycles, c.cpu.Cycles, nil, nil, 0)
 	c.finishInstructionBoundaryLocked()
@@ -425,6 +426,12 @@ func (c *Console) serviceIRQInterruptLocked(startCycles uint64, sampleIndex *int
 	c.advanceInterruptEntryCyclesLocked(int(c.cpu.Cycles-prevCycles), startCycles, sampleIndex, nextSampleAt, monoSamplesPerFrame)
 }
 
+func (c *Console) serviceIRQInterruptForcedLocked(startCycles uint64, sampleIndex *int, nextSampleAt *float64, monoSamplesPerFrame int) {
+	prevCycles := c.cpu.Cycles
+	c.cpu.IRQForced(c)
+	c.advanceInterruptEntryCyclesLocked(int(c.cpu.Cycles-prevCycles), startCycles, sampleIndex, nextSampleAt, monoSamplesPerFrame)
+}
+
 func (c *Console) queueNMIInterruptLocked() {
 	c.nmiPending = true
 	if c.nmiDelayInstr < 1 {
@@ -448,21 +455,30 @@ func (c *Console) serviceQueuedIRQIfReadyLocked(startCycles uint64, sampleIndex 
 	if c.irqDelayInstr > 0 {
 		return
 	}
+	if c.irqMaskLatency > 0 {
+		c.serviceIRQInterruptForcedLocked(startCycles, sampleIndex, nextSampleAt, monoSamplesPerFrame)
+		return
+	}
 	c.serviceIRQInterruptLocked(startCycles, sampleIndex, nextSampleAt, monoSamplesPerFrame)
 }
 
-func (c *Console) noteIRQUnmaskByInstructionLocked(prevP byte) {
-	if prevP&flagI == 0 || c.cpu.P&flagI != 0 {
-		return
-	}
-	if c.irqDelayInstr < 1 {
+func (c *Console) noteIRQMaskTransitionsLocked(prevP byte) {
+	prevI := prevP&flagI != 0
+	curI := c.cpu.P&flagI != 0
+	if prevI && !curI && c.irqDelayInstr < 1 {
 		c.irqDelayInstr = 1
+	}
+	if !prevI && curI && c.irqMaskLatency < 1 {
+		c.irqMaskLatency = 1
 	}
 }
 
 func (c *Console) finishInstructionBoundaryLocked() {
 	if c.irqDelayInstr > 0 {
 		c.irqDelayInstr--
+	}
+	if c.irqMaskLatency > 0 {
+		c.irqMaskLatency--
 	}
 }
 

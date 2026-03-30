@@ -100,3 +100,10 @@
 - Refined MMC3 IRQ clock gating to require A12-high fetch-capable rendering conditions instead of unconditional per-scanline clocking.
 - Added mapper4 regression coverage for "no IRQ when pattern fetches remain below `$1000`".
 - Re-ran full test suite and owned-ROM evidence (`--frames 240`); backlog remains `1` (`Hoshi no Kirby - Yume no Izumi no Monogatari (Japan).nes` still uniform).
+
+## Progress Update (2026-03-31)
+- Extended IRQ sampling behavior at instruction boundaries to cover both mask-transition directions:
+  - `CLI`-side unmask delay (`I:1 -> 0`) stays deferred by one instruction.
+  - `SEI`-side mask transition (`I:0 -> 1`) still allows pending IRQ on the current boundary via pre-instruction sampling.
+- Added regression coverage for pending-IRQ behavior immediately after `SEI`.
+- Re-ran full test suite and owned-ROM evidence (`--frames 240`) with no regressions; backlog remains `1` (`Hoshi no Kirby - Yume no Izumi no Monogatari (Japan).nes`).

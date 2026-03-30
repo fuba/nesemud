@@ -877,6 +877,14 @@ func (c *cpu6502) IRQ(bus cpuBus) {
 	if c.hasFlag(flagI) {
 		return
 	}
+	c.enterIRQ(bus)
+}
+
+func (c *cpu6502) IRQForced(bus cpuBus) {
+	c.enterIRQ(bus)
+}
+
+func (c *cpu6502) enterIRQ(bus cpuBus) {
 	c.push(bus, byte(c.PC>>8))
 	c.push(bus, byte(c.PC))
 	c.push(bus, (c.P&^flagB)|flagU)
