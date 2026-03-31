@@ -24,6 +24,28 @@ func TestMapper3CHRBankSwitchHonorsBusConflicts(t *testing.T) {
 	}
 }
 
+func TestMapper3CHRBankSwitchKeepsUpperBitsForLargeCHR(t *testing.T) {
+	c := NewConsole()
+	prg := make([]byte, 2*16*1024)
+	prg[0] = 0x1F
+	chr := make([]byte, 8*8*1024)
+	for b := 0; b < 8; b++ {
+		chr[b*8*1024] = byte(0x40 + b)
+	}
+	c.cart = &Cartridge{
+		PRG:      prg,
+		CHR:      chr,
+		Mapper:   3,
+		PRGBanks: 2,
+		CHRBanks: 8,
+	}
+
+	c.writeCPU(0x8000, 0x1F)
+	if got := c.ppu.ppuRead(c, 0x0000); got != 0x47 {
+		t.Fatalf("mapper3 chr read=0x%02X, want 0x47 when selecting bank 7", got)
+	}
+}
+
 func TestMapper33PRGAndCHRBankSwitch(t *testing.T) {
 	c := NewConsole()
 	prg := make([]byte, 4*8*1024)

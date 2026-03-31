@@ -209,7 +209,7 @@ func (c *Cartridge) writePRG(addr uint16, value byte) {
 	case 2:
 		c.mapper2BankSel = value & 0x0F
 	case 3:
-		c.mapper3CHRSel = c.mapper3ResolveBusConflict(addr, value) & 0x03
+		c.mapper3CHRSel = c.mapper3ResolveBusConflict(addr, value)
 	case 4:
 		c.mmc3Write(addr, value)
 	case 5:

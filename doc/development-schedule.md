@@ -106,4 +106,6 @@
   - `CLI`-side unmask delay (`I:1 -> 0`) stays deferred by one instruction.
   - `SEI`-side mask transition (`I:0 -> 1`) still allows pending IRQ on the current boundary via pre-instruction sampling.
 - Added regression coverage for pending-IRQ behavior immediately after `SEI`.
+- Updated mapper3 CHR bank select handling to keep upper bits after bus conflict resolution (instead of forcing 2-bit selection).
+- Added mapper3 regression coverage for large-CHR configurations (`CHRBanks > 4`) to ensure high-bank selection works.
 - Re-ran full test suite and owned-ROM evidence (`--frames 240`) with no regressions; backlog remains `1` (`Hoshi no Kirby - Yume no Izumi no Monogatari (Japan).nes`).
