@@ -109,3 +109,14 @@
 - Updated mapper3 CHR bank select handling to keep upper bits after bus conflict resolution (instead of forcing 2-bit selection).
 - Added mapper3 regression coverage for large-CHR configurations (`CHRBanks > 4`) to ensure high-bank selection works.
 - Re-ran full test suite and owned-ROM evidence (`--frames 240`) with no regressions; backlog remains `1` (`Hoshi no Kirby - Yume no Izumi no Monogatari (Japan).nes`).
+
+## Progress Update (2026-04-02)
+- Re-ran full owned-ROM evidence over `dont_upload_roms` and regenerated checklist/evidence artifacts.
+  - ROM count: `62`
+  - Healthy runs: `61`
+  - Action items: `1` (`Hoshi no Kirby - Yume no Izumi no Monogatari (Japan).nes`, mapper 4)
+- Verified local Kirby ROM hash differs from known reference set:
+  - local full CRC32: `63C58D8E`
+  - local payload CRC32: `A3EE28F8`
+  - known reference CRC32: `E4A7D436`
+- User decision: treat the remaining Kirby mismatch as an accepted out-of-scope variance and close current development phase.
