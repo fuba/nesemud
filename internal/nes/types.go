@@ -39,68 +39,70 @@ type Replay struct {
 }
 
 type Cartridge struct {
-	PRG             []byte
-	CHR             []byte
-	PRGRAM          []byte
-	Mapper          uint8
-	PRGBanks        int
-	CHRBanks        int
-	CHRIsRAM        bool
-	HasBattery      bool
-	HasTrainer      bool
-	mapper2BankSel  byte
-	mapper3CHRSel   byte
-	mapper33PRG     [2]byte
-	mapper33CHR     [6]byte
-	mapper66PRGSel  byte
-	mapper66CHRSel  byte
-	mapper75PRG     [3]byte
-	mapper75CHR     [2]byte
-	mapper87CHRSel  byte
-	mmc5PRGMode     byte
-	mmc5CHRMode     byte
-	mmc5PRGBank     [5]byte
-	mmc5CHRBank     [12]byte
-	mmc5UpperCHR    byte
-	mmc5ExRAMMode   byte
-	mmc5ExRAM       [1024]byte
-	mmc5FillTile    byte
-	mmc5FillAttr    byte
-	mmc5NTMap       [4]byte
-	mmc5PRGRAM      [64 * 1024]byte
-	mmc5RAMProtect1 byte
-	mmc5RAMProtect2 byte
-	mmc5MulA        byte
-	mmc5MulB        byte
-	mmc5IRQLatch    byte
-	mmc5IRQEnable   bool
-	mmc5IRQPending  bool
-	mmc5InFrame     bool
-	mmc5Scanline    byte
-	vrcPRG0         byte
-	vrcPRG1         byte
-	vrcSwapMode     bool
-	vrcCHRLow       [8]byte
-	vrcCHRHigh      [8]byte
-	vrcIRQCounter   byte
-	vrcIRQLatch     byte
-	vrcIRQEnable    bool
-	vrcIRQEnableAck bool
-	vrcIRQPrescaler int
-	vrcIRQPending   bool
-	mirroring       MirroringMode
-	mmc1Shift       byte
-	mmc1Control     byte
-	mmc1CHRBank0    byte
-	mmc1CHRBank1    byte
-	mmc1PRGBank     byte
-	mmc3BankSelect  byte
-	mmc3Regs        [8]byte
-	mmc3IRQLatch    byte
-	mmc3IRQCounter  byte
-	mmc3IRQReload   bool
-	mmc3IRQEnable   bool
-	mmc3IRQPending  bool
+	PRG              []byte
+	CHR              []byte
+	PRGRAM           []byte
+	Mapper           uint8
+	PRGBanks         int
+	CHRBanks         int
+	CHRIsRAM         bool
+	HasBattery       bool
+	HasTrainer       bool
+	mapper2BankSel   byte
+	mapper3CHRSel    byte
+	mapper33PRG      [2]byte
+	mapper33CHR      [6]byte
+	mapper66PRGSel   byte
+	mapper66CHRSel   byte
+	mapper75PRG      [3]byte
+	mapper75CHR      [2]byte
+	mapper87CHRSel   byte
+	mmc5PRGMode      byte
+	mmc5CHRMode      byte
+	mmc5PRGBank      [5]byte
+	mmc5CHRBank      [12]byte
+	mmc5UpperCHR     byte
+	mmc5ExRAMMode    byte
+	mmc5ExRAM        [1024]byte
+	mmc5FillTile     byte
+	mmc5FillAttr     byte
+	mmc5NTMap        [4]byte
+	mmc5PRGRAM       [64 * 1024]byte
+	mmc5RAMProtect1  byte
+	mmc5RAMProtect2  byte
+	mmc5MulA         byte
+	mmc5MulB         byte
+	mmc5IRQLatch     byte
+	mmc5IRQEnable    bool
+	mmc5IRQPending   bool
+	mmc5InFrame      bool
+	mmc5Scanline     byte
+	vrcPRG0          byte
+	vrcPRG1          byte
+	vrcSwapMode      bool
+	vrcCHRLow        [8]byte
+	vrcCHRHigh       [8]byte
+	vrcIRQCounter    byte
+	vrcIRQLatch      byte
+	vrcIRQEnable     bool
+	vrcIRQEnableAck  bool
+	vrcIRQPrescaler  int
+	vrcIRQPending    bool
+	mirroring        MirroringMode
+	mmc1Shift        byte
+	mmc1Control      byte
+	mmc1CHRBank0     byte
+	mmc1CHRBank1     byte
+	mmc1PRGBank      byte
+	mmc3BankSelect   byte
+	mmc3Regs         [8]byte
+	mmc3IRQLatch     byte
+	mmc3IRQCounter   byte
+	mmc3IRQReload    bool
+	mmc3IRQEnable    bool
+	mmc3IRQPending   bool
+	mmc3PRGRAMEnable bool
+	mmc3PRGWriteDeny bool
 }
 
 type scanlineRenderState struct {
@@ -178,6 +180,10 @@ type Console struct {
 	replayCursor     int
 	lastFrameTime    time.Time
 	lastCPUError     string
+	nmiPending       bool
+	nmiDelayInstr    int
+	irqDelayInstr    int
+	irqMaskLatency   int
 }
 
 type CPUState struct {

@@ -3,6 +3,11 @@
 This replaces the overly-optimistic "all done" view in `doc/master-checklist.md`.
 The codebase passes unit tests, but real ROM testing shows several compatibility gaps.
 
+## Closure Note (2026-04-02)
+- A full owned-ROM sweep was re-run on 2026-04-02 (`62` ROMs).
+- Result: `61` healthy, `1` remaining known variance (Kirby local-image mismatch case).
+- By user decision, current phase is closed with that remaining variance accepted as out-of-scope.
+
 ## 1. CPU
 - [x] Expand illegal opcode coverage beyond the current small subset.
 - [ ] Add correctness validation against real CPU conformance ROMs, not just "opcode does not error" tests.

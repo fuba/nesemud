@@ -43,7 +43,7 @@ func LoadINES(data []byte) (*Cartridge, error) {
 		mirroring = MirroringVertical
 	}
 	hasBattery := flags6&0x02 != 0
-	prgRAMSize := inferINESPRGRAMSize(data[8], flags6&0x04 != 0)
+	prgRAMSize := inferINESPRGRAMSize(data[8], mapper, hasBattery, flags6&0x04 != 0)
 
 	cart := &Cartridge{
 		PRG:        append([]byte(nil), data[offset:offset+prgLen]...),
@@ -96,6 +96,10 @@ func LoadINES(data []byte) (*Cartridge, error) {
 		num8k := max(1, len(cart.PRG)/(8*1024))
 		cart.mmc5PRGBank[4] = byte(num8k - 1)
 	}
+	if mapper == 4 {
+		cart.mmc3PRGRAMEnable = true
+		cart.mmc3PRGWriteDeny = false
+	}
 	return cart, nil
 }
 
@@ -116,14 +120,31 @@ func inesHeaderTailIsZero(trailing []byte) bool {
 	return true
 }
 
-func inferINESPRGRAMSize(byte8 byte, hasTrainer bool) int {
+func inferINESPRGRAMSize(byte8 byte, mapper byte, hasBattery bool, hasTrainer bool) int {
 	if byte8 != 0 {
 		return int(byte8) * 8 * 1024
 	}
 	if hasTrainer {
 		return 8 * 1024
 	}
-	return 0
+	// For common board families where iNES byte8 is frequently omitted,
+	// use the usual 8 KiB default to keep mapper RAM behavior practical.
+	switch mapper {
+	case 1, 5:
+		return 8 * 1024
+	case 4:
+		if hasBattery {
+			return 8 * 1024
+		}
+		return 0
+	case 23, 25:
+		if hasBattery {
+			return 8 * 1024
+		}
+		return 0
+	default:
+		return 0
+	}
 }
 
 func isSupportedMapper(mapper byte) bool {
@@ -188,7 +209,7 @@ func (c *Cartridge) writePRG(addr uint16, value byte) {
 	case 2:
 		c.mapper2BankSel = value & 0x0F
 	case 3:
-		c.mapper3CHRSel = c.mapper3ResolveBusConflict(addr, value) & 0x03
+		c.mapper3CHRSel = c.mapper3ResolveBusConflict(addr, value)
 	case 4:
 		c.mmc3Write(addr, value)
 	case 5:
@@ -270,7 +291,27 @@ func (c *Cartridge) writeCHR(addr uint16, value byte) {
 	if !c.CHRIsRAM || len(c.CHR) == 0 {
 		return
 	}
-	c.CHR[int(addr)%len(c.CHR)] = value
+	switch c.Mapper {
+	case 1:
+		if c.mmc1Control&0x10 == 0 {
+			bank8k := int(c.mmc1CHRBank0&0x1E) % max(1, len(c.CHR)/(8*1024))
+			base := bank8k * 8 * 1024
+			c.CHR[base+int(addr&0x1FFF)] = value
+			return
+		}
+		if addr < 0x1000 {
+			bank4k := int(c.mmc1CHRBank0) % max(1, len(c.CHR)/(4*1024))
+			base := bank4k * 4 * 1024
+			c.CHR[base+int(addr&0x0FFF)] = value
+			return
+		}
+		bank4k := int(c.mmc1CHRBank1) % max(1, len(c.CHR)/(4*1024))
+		base := bank4k * 4 * 1024
+		c.CHR[base+int(addr&0x0FFF)] = value
+		return
+	default:
+		c.CHR[int(addr)%len(c.CHR)] = value
+	}
 }
 
 func (c *Cartridge) readPRGMapper1(addr uint16) byte {
@@ -301,8 +342,8 @@ func (c *Cartridge) readPRGMapper1(addr uint16) byte {
 
 func (c *Cartridge) readPRGMapper4(addr uint16) byte {
 	num8k := max(1, len(c.PRG)/(8*1024))
-	bank6 := int(c.mmc3Regs[6]) % num8k
-	bank7 := int(c.mmc3Regs[7]) % num8k
+	bank6 := int(c.mmc3Regs[6]&0x3F) % num8k
+	bank7 := int(c.mmc3Regs[7]&0x3F) % num8k
 	last := num8k - 1
 	secondLast := max(0, num8k-2)
 	prgMode := (c.mmc3BankSelect >> 6) & 1
@@ -412,8 +453,8 @@ func (c *Cartridge) readPRGMapper206(addr uint16) byte {
 	num8k := max(1, len(c.PRG)/(8*1024))
 	last := num8k - 1
 	secondLast := max(0, num8k-2)
-	bank6 := int(c.mmc3Regs[6] & 0x3F % byte(num8k))
-	bank7 := int(c.mmc3Regs[7] & 0x3F % byte(num8k))
+	bank6 := int(c.mmc3Regs[6]&0x3F) % num8k
+	bank7 := int(c.mmc3Regs[7]&0x3F) % num8k
 	var bank int
 	switch {
 	case addr < 0xA000:
@@ -702,6 +743,10 @@ func (c *Cartridge) vrcWrite(addr uint16, value byte) {
 		c.vrcIRQEnable = c.vrcIRQEnableAck
 		c.vrcIRQPending = false
 		c.vrcIRQPrescaler = 341
+	case 0xF003:
+		c.vrcIRQEnable = c.vrcIRQEnableAck
+		c.vrcIRQPending = false
+		c.vrcIRQPrescaler = 341
 	}
 }
 
@@ -810,13 +855,29 @@ func (c *Cartridge) readPRGRAM(addr uint16) byte {
 	if len(c.PRGRAM) == 0 {
 		return 0
 	}
+	if c.Mapper == 4 && !c.mmc3PRGRAMEnable {
+		return 0
+	}
 	return c.PRGRAM[int(addr-0x6000)%len(c.PRGRAM)]
 }
 
 func (c *Cartridge) writePRGRAM(addr uint16, value byte) {
 	if c.Mapper != 5 {
-		if len(c.PRGRAM) == 0 {
+		if c.Mapper == 4 {
+			if len(c.PRGRAM) == 0 {
+				return
+			}
+			if !c.mmc3PRGRAMEnable || c.mmc3PRGWriteDeny {
+				return
+			}
+			c.PRGRAM[int(addr-0x6000)%len(c.PRGRAM)] = value
+			return
+		}
+		if c.Mapper == 87 {
 			c.writePRG(addr, value)
+			return
+		}
+		if len(c.PRGRAM) == 0 {
 			return
 		}
 		c.PRGRAM[int(addr-0x6000)%len(c.PRGRAM)] = value
@@ -1005,6 +1066,9 @@ func (c *Cartridge) mmc3Write(addr uint16, value byte) {
 			} else {
 				c.mirroring = MirroringHorizontal
 			}
+		} else {
+			c.mmc3PRGRAMEnable = value&0x80 != 0
+			c.mmc3PRGWriteDeny = value&0x40 != 0
 		}
 	case addr >= 0xC000 && addr <= 0xDFFF:
 		if addr&1 == 0 {
@@ -1048,6 +1112,10 @@ func (c *Cartridge) consumeIRQ() bool {
 		return true
 	}
 	return false
+}
+
+func (c *Cartridge) irqPending() bool {
+	return c.mmc3IRQPending || c.mmc5IRQPending || c.vrcIRQPending
 }
 
 func (c *Cartridge) mmc5ClockScanline() {

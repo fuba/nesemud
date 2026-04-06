@@ -3,6 +3,12 @@
 This checklist is a high-level roadmap.
 For current implementation reality and known gaps, see `doc/implementation-gap-checklist-2026-03-10.md`.
 
+## Closure Status (2026-04-02)
+- Current development phase is closed by user decision after full owned-ROM revalidation.
+- Latest owned-ROM evidence result: `61/62` healthy.
+- Accepted known variance: `Hoshi no Kirby - Yume no Izumi no Monogatari (Japan).nes` remains `WARN` under the local ROM image (hash mismatch vs known reference set).
+- Remaining unchecked items below are treated as optional future hardening work, not blockers for this closure.
+
 ## 0. Runtime / Ops
 - [x] Daemonized runtime with background launch and logfile output
 - [x] Hot reload trigger via SIGHUP

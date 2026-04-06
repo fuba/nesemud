@@ -339,6 +339,9 @@ func (c *cpu6502) Step(bus cpuBus) error {
 	case 0xE9:
 		c.sbc(c.fetch8(bus))
 		c.Cycles += 2
+	case 0xEB: // USBC/SBC #imm (illegal alias)
+		c.sbc(c.fetch8(bus))
+		c.Cycles += 2
 	case 0xE5:
 		c.sbc(bus.read(c.addrZP(bus)))
 		c.Cycles += 3
@@ -634,6 +637,9 @@ func (c *cpu6502) Step(bus cpuBus) error {
 
 	case 0xEA:
 		c.Cycles += 2
+	case 0x02, 0x12, 0x22, 0x32, 0x42, 0x52, 0x62, 0x72, 0x92, 0xB2, 0xD2, 0xF2:
+		// KIL/JAM opcodes are treated as inert 1-byte NOPs for compatibility.
+		c.Cycles += 2
 	case 0x1A, 0x3A, 0x5A, 0x7A, 0xDA, 0xFA: // NOP (illegal, implied)
 		c.Cycles += 2
 	case 0x0B, 0x2B: // ANC #imm
@@ -871,6 +877,14 @@ func (c *cpu6502) IRQ(bus cpuBus) {
 	if c.hasFlag(flagI) {
 		return
 	}
+	c.enterIRQ(bus)
+}
+
+func (c *cpu6502) IRQForced(bus cpuBus) {
+	c.enterIRQ(bus)
+}
+
+func (c *cpu6502) enterIRQ(bus cpuBus) {
 	c.push(bus, byte(c.PC>>8))
 	c.push(bus, byte(c.PC))
 	c.push(bus, (c.P&^flagB)|flagU)

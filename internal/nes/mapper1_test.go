@@ -48,6 +48,31 @@ func TestMirroringModes(t *testing.T) {
 	}
 }
 
+func TestMapper1CHRRAMWriteRespectsSelected4KiBBank(t *testing.T) {
+	c := NewConsole()
+	c.cart = &Cartridge{
+		PRG:       make([]byte, 2*16*1024),
+		CHR:       make([]byte, 8*1024),
+		CHRIsRAM:  true,
+		Mapper:    1,
+		PRGBanks:  2,
+		CHRBanks:  1,
+		mirroring: MirroringHorizontal,
+	}
+	c.cart.mmc1Reset()
+
+	writeMMC1Reg(c, 0x8000, 0x1C) // 4KiB CHR mode + PRG mode 3
+	writeMMC1Reg(c, 0xA000, 0x01) // CHR bank 0 -> bank 1
+	c.ppu.ppuWrite(c, 0x0000, 0xAB)
+
+	if got := c.cart.CHR[0]; got != 0x00 {
+		t.Fatalf("chr bank 0 unexpectedly written: got 0x%02X", got)
+	}
+	if got := c.cart.CHR[4*1024]; got != 0xAB {
+		t.Fatalf("chr bank 1 write not reflected: got 0x%02X, want 0xAB", got)
+	}
+}
+
 func writeMMC1Reg(c *Console, addr uint16, value byte) {
 	for i := 0; i < 5; i++ {
 		bit := (value >> i) & 1

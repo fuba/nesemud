@@ -123,3 +123,22 @@ func TestCPUIllegalStoreHighVariantsDontError(t *testing.T) {
 		}
 	}
 }
+
+func TestCPUIllegalUSBCImmediateAlias(t *testing.T) {
+	c := NewConsole()
+	cart := buildTestCartridge([]byte{
+		0xA9, 0x50, // LDA #$50
+		0x38,       // SEC
+		0xEB, 0x10, // USBC/SBC #$10 => A=$40
+	})
+	c.cart = cart
+	c.cpu.Reset(c)
+	for i := 0; i < 3; i++ {
+		if err := c.cpu.Step(c); err != nil {
+			t.Fatalf("step %d failed: %v", i, err)
+		}
+	}
+	if c.cpu.A != 0x40 {
+		t.Fatalf("A = 0x%02X, want 0x40", c.cpu.A)
+	}
+}

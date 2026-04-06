@@ -370,6 +370,44 @@ func TestMidFramePPUSCROLLWriteCreatesSameLineSplitState(t *testing.T) {
 	}
 }
 
+func TestRecordCurrentLineStateKeepsLatestStateWhenSegmentCapacityIsReached(t *testing.T) {
+	c := NewConsole()
+	c.cart = &Cartridge{
+		Mapper:   0,
+		PRGBanks: 1,
+		CHRBanks: 1,
+		PRG:      make([]byte, 16*1024),
+		CHR:      make([]byte, 8*1024),
+	}
+
+	base := scanlineRenderState{
+		valid:     true,
+		ctrl:      0x00,
+		mask:      0x0A,
+		vramAddr:  0,
+		fineX:     0,
+		mirroring: MirroringHorizontal,
+		mapper:    0,
+	}
+	c.ppu.lineState[0] = base
+	c.ppu.lineSplitN[0] = 1
+	c.ppu.lineSplits[0][0] = scanlineStateSegment{startX: 0, state: base}
+	c.ppu.scanline = 0
+
+	writes := len(c.ppu.lineSplits[0]) + 4
+	for i := 0; i < writes; i++ {
+		c.ppu.cycle = 2 + i*2
+		c.ppu.ctrl = byte(i + 1)
+		c.ppu.recordCurrentLineState(c, 0)
+	}
+
+	got := c.ppu.renderStateForPixel(c, 0, FrameWidth-1).ctrl
+	want := byte(writes)
+	if got != want {
+		t.Fatalf("right-edge state ctrl=0x%02X, want latest 0x%02X", got, want)
+	}
+}
+
 func TestRenderFrameUsesSameLineSegmentOrigin(t *testing.T) {
 	c := NewConsole()
 	c.cart = &Cartridge{

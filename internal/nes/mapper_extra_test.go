@@ -24,6 +24,28 @@ func TestMapper3CHRBankSwitchHonorsBusConflicts(t *testing.T) {
 	}
 }
 
+func TestMapper3CHRBankSwitchKeepsUpperBitsForLargeCHR(t *testing.T) {
+	c := NewConsole()
+	prg := make([]byte, 2*16*1024)
+	prg[0] = 0x1F
+	chr := make([]byte, 8*8*1024)
+	for b := 0; b < 8; b++ {
+		chr[b*8*1024] = byte(0x40 + b)
+	}
+	c.cart = &Cartridge{
+		PRG:      prg,
+		CHR:      chr,
+		Mapper:   3,
+		PRGBanks: 2,
+		CHRBanks: 8,
+	}
+
+	c.writeCPU(0x8000, 0x1F)
+	if got := c.ppu.ppuRead(c, 0x0000); got != 0x47 {
+		t.Fatalf("mapper3 chr read=0x%02X, want 0x47 when selecting bank 7", got)
+	}
+}
+
 func TestMapper33PRGAndCHRBankSwitch(t *testing.T) {
 	c := NewConsole()
 	prg := make([]byte, 4*8*1024)
@@ -208,6 +230,29 @@ func TestMapper206PRGAndCHRBankSwitch(t *testing.T) {
 	}
 }
 
+func TestMapper206PRGBankSelectionUsesModuloBankCount(t *testing.T) {
+	c := NewConsole()
+	prg := make([]byte, 6*8*1024)
+	for b := 0; b < 6; b++ {
+		for i := 0; i < 8*1024; i++ {
+			prg[b*8*1024+i] = byte(0x70 + b)
+		}
+	}
+	c.cart = &Cartridge{
+		PRG:      prg,
+		CHR:      make([]byte, 8*1024),
+		Mapper:   206,
+		PRGBanks: 3,
+		CHRBanks: 1,
+	}
+
+	c.writeCPU(0x8000, 0x06)
+	c.writeCPU(0x8001, 0x05)
+	if got := c.readCPU(0x8000); got != 0x75 {
+		t.Fatalf("mapper206 prg modulo bank select read=0x%02X, want 0x75", got)
+	}
+}
+
 func TestMapper23PRGCHRMirroringAndIRQ(t *testing.T) {
 	c := NewConsole()
 	prg := make([]byte, 8*8*1024)
@@ -273,6 +318,28 @@ func TestMapper25PRGCHRSwitch(t *testing.T) {
 	c.writeCPU(0xC000, 0x05)
 	if got := c.ppu.ppuRead(c, 0x0800); got != 0x88 {
 		t.Fatalf("mapper25 chr read=0x%02X, want 0x88", got)
+	}
+}
+
+func TestMapper25IRQAckViaF003ClearsPending(t *testing.T) {
+	c := NewConsole()
+	c.cart = &Cartridge{
+		PRG:      make([]byte, 4*16*1024),
+		CHR:      make([]byte, 8*1024),
+		Mapper:   25,
+		PRGBanks: 4,
+		CHRBanks: 1,
+	}
+	c.cart.vrcIRQEnableAck = false
+	c.cart.vrcIRQEnable = true
+	c.cart.vrcIRQPending = true
+
+	c.writeCPU(0xF003, 0x00)
+	if c.cart.vrcIRQPending {
+		t.Fatalf("expected mapper25 IRQ pending to clear on $F003 ACK")
+	}
+	if c.cart.vrcIRQEnable {
+		t.Fatalf("expected mapper25 IRQ enable to follow ack latch (false)")
 	}
 }
 

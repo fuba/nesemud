@@ -1,5 +1,7 @@
 package nes
 
+const maxScanlineStateSegments = 32
+
 type ppu struct {
 	ctrl        byte
 	mask        byte
@@ -15,8 +17,9 @@ type ppu struct {
 	palette     [32]byte
 	cycle       int
 	scanline    int
+	frameID     uint64
 	lineState   [FrameHeight]scanlineRenderState
-	lineSplits  [FrameHeight][8]scanlineStateSegment
+	lineSplits  [FrameHeight][maxScanlineStateSegments]scanlineStateSegment
 	lineSplitN  [FrameHeight]int
 	sprite0HitX [FrameHeight]int
 	frameRGB    []byte
@@ -55,6 +58,7 @@ func (p *ppu) Reset() {
 	p.readBuf = 0
 	p.cycle = 0
 	p.scanline = 0
+	p.frameID = 0
 	for i := range p.lineState {
 		p.lineState[i] = scanlineRenderState{}
 		p.lineSplitN[i] = 0
@@ -244,6 +248,10 @@ func (p *ppu) step(c *Console, cycles int) bool {
 	for i := 0; i < cycles*3; i++ {
 		p.cycle++
 		rendering := p.mask&0x18 != 0
+		if p.shouldSkipOddFrameDot(rendering) {
+			p.startNextFrame(c)
+			continue
+		}
 		if p.scanline < 240 && p.cycle == 1 {
 			start := p.scanline * FrameWidth
 			end := start + FrameWidth
@@ -280,6 +288,11 @@ func (p *ppu) step(c *Console, cycles int) bool {
 					c.cart.mmc5ClockScanline()
 				}
 			case p.scanline == 241:
+				if c != nil && c.cart != nil && len(c.lastFrame) >= FrameSizeRGB {
+					// Capture completed visible frame before vblank-time register updates mutate line state.
+					p.renderFrame(c, c.lastFrame)
+					copy(p.frameRGB, c.lastFrame)
+				}
 				p.status |= 0x80
 				if p.ctrl&0x80 != 0 {
 					nmi = true
@@ -289,7 +302,7 @@ func (p *ppu) step(c *Console, cycles int) bool {
 			}
 		}
 		if p.cycle == 260 && c != nil && c.cart != nil && c.cart.Mapper == 4 {
-			if p.scanline < 240 || p.scanline == 261 {
+			if p.shouldClockMMC3IRQ(rendering) {
 				c.cart.mmc3ClockIRQ()
 			}
 		}
@@ -302,21 +315,54 @@ func (p *ppu) step(c *Console, cycles int) bool {
 			p.cycle = 0
 			p.scanline++
 			if p.scanline >= 262 {
-				if c != nil && c.cart != nil && c.cart.Mapper == 5 {
-					c.cart.mmc5EndFrame()
-				}
-				p.scanline = 0
+				p.startNextFrame(c)
 			}
 		}
 	}
 	return nmi
 }
 
+func (p *ppu) shouldSkipOddFrameDot(rendering bool) bool {
+	return rendering && p.scanline == 261 && p.cycle == 340 && p.frameID%2 == 1
+}
+
+func (p *ppu) shouldClockMMC3IRQ(rendering bool) bool {
+	if !rendering {
+		return false
+	}
+	if p.scanline >= 240 && p.scanline != 261 {
+		return false
+	}
+	bgFetchHigh := p.mask&0x08 != 0 && p.ctrl&0x10 != 0
+	if bgFetchHigh {
+		return true
+	}
+	if p.mask&0x10 == 0 {
+		return false
+	}
+	if p.ctrl&0x20 != 0 {
+		return true
+	}
+	return p.ctrl&0x08 != 0
+}
+
+func (p *ppu) startNextFrame(c *Console) {
+	if c != nil && c.cart != nil && c.cart.Mapper == 5 {
+		c.cart.mmc5EndFrame()
+	}
+	p.scanline = 0
+	p.cycle = 0
+	p.frameID++
+}
+
 func (p *ppu) renderFrame(c *Console, dst []byte) {
 	if len(dst) < FrameSizeRGB {
 		return
 	}
-	bgOpaque := make([]bool, FrameWidth*FrameHeight)
+	bgOpaque := p.frameBGOpaq
+	for i := range bgOpaque {
+		bgOpaque[i] = false
+	}
 	for y := 0; y < FrameHeight; y++ {
 		state, segmentStartX := p.renderSegmentForPixel(c, y, 0)
 		showBG := state.mask&0x08 != 0
@@ -638,7 +684,14 @@ func (p *ppu) recordCurrentLineState(c *Console, delayPixels int) {
 	if n < len(p.lineSplits[line]) {
 		p.lineSplits[line][n] = scanlineStateSegment{startX: startX, state: st}
 		p.lineSplitN[line]++
+		return
 	}
+	// Keep the newest state reachable on the right edge even when we hit segment capacity.
+	last := len(p.lineSplits[line]) - 1
+	if startX < p.lineSplits[line][last].startX {
+		startX = p.lineSplits[line][last].startX
+	}
+	p.lineSplits[line][last] = scanlineStateSegment{startX: startX, state: st}
 }
 
 func (p *ppu) captureState(c *Console) scanlineRenderState {
