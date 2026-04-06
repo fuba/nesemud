@@ -3,10 +3,11 @@
 This checklist is a high-level roadmap.
 For current implementation reality and known gaps, see `doc/implementation-gap-checklist-2026-03-10.md`.
 
-## Closure Status (2026-04-02)
+## Closure Status (2026-04-07)
 - Current development phase is closed by user decision after full owned-ROM revalidation.
 - Latest owned-ROM evidence result: `61/62` healthy.
 - Accepted known variance: `Hoshi no Kirby - Yume no Izumi no Monogatari (Japan).nes` remains `WARN` under the local ROM image (hash mismatch vs known reference set).
+- Runtime refresh check completed on `2026-04-07`: port `18081` container rebuilt from current `main`, API/Web endpoints responding.
 - Remaining unchecked items below are treated as optional future hardening work, not blockers for this closure.
 
 ## 0. Runtime / Ops

@@ -120,3 +120,13 @@
   - local payload CRC32: `A3EE28F8`
   - known reference CRC32: `E4A7D436`
 - User decision: treat the remaining Kirby mismatch as an accepted out-of-scope variance and close current development phase.
+
+## Progress Update (2026-04-07)
+- Rebuilt and replaced the development daemon container on port `18081` from current `main`:
+  - previous image: `sha256:35675365a14af1cc4e6c56c155f538cd53fd6f1d69bd0072abf7a7a0e520403e`
+  - current image: `sha256:a15b071a1a8c81bcd02581a5ed64286b58578f05849d0b506b9e2d7bf5965022`
+- Re-validated `edgerace.nes` (`https://github.com/fuba/nes-race-danmaku/blob/main/build/edgerace.nes`) with owned-evidence:
+  - `--frames 240`: action items `0`
+  - `--frames 2400`: action items `0`
+- Merged `fix/streaming-race-and-docker-limits` into `main` and pushed (`6a3e760`).
+- Documentation finalized for project closeout.
