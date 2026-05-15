@@ -152,11 +152,13 @@ func (c *Console) StepFrame() {
 	if c.cart == nil {
 		c.renderFallbackFrameLocked()
 	}
-	for sampleIndex < monoSamplesPerFrame {
-		s := c.apu.Sample(c.readCPU)
-		c.audioSamples[sampleIndex*2] = s
-		c.audioSamples[sampleIndex*2+1] = s
-		sampleIndex++
+	if !c.simulationFast {
+		for sampleIndex < monoSamplesPerFrame {
+			s := c.apu.Sample(c.readCPU)
+			c.audioSamples[sampleIndex*2] = s
+			c.audioSamples[sampleIndex*2+1] = s
+			sampleIndex++
+		}
 	}
 	c.lastFrameTime = time.Now()
 }

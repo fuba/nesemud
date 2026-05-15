@@ -179,6 +179,7 @@ type Console struct {
 	replay           *Replay
 	replayCursor     int
 	lastFrameTime    time.Time
+	simulationFast   bool
 	lastCPUError     string
 	nmiPending       bool
 	nmiDelayInstr    int

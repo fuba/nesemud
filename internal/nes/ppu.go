@@ -259,7 +259,7 @@ func (p *ppu) step(c *Console, cycles int) bool {
 				p.frameBGOpaq[idx] = false
 			}
 		}
-		if p.scanline < 240 && p.cycle >= 1 && p.cycle <= 256 {
+		if p.scanline < 240 && p.cycle >= 1 && p.cycle <= 256 && (c == nil || !c.simulationFast) {
 			p.renderLiveBackgroundPixel(c, p.scanline, p.cycle-1)
 			p.renderLiveSpritePixel(c, p.scanline, p.cycle-1)
 		}
@@ -288,7 +288,7 @@ func (p *ppu) step(c *Console, cycles int) bool {
 					c.cart.mmc5ClockScanline()
 				}
 			case p.scanline == 241:
-				if c != nil && c.cart != nil && len(c.lastFrame) >= FrameSizeRGB {
+				if c != nil && !c.simulationFast && c.cart != nil && len(c.lastFrame) >= FrameSizeRGB {
 					// Capture completed visible frame before vblank-time register updates mutate line state.
 					p.renderFrame(c, c.lastFrame)
 					copy(p.frameRGB, c.lastFrame)

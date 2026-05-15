@@ -91,6 +91,44 @@ func TestInputEndpointUpdatesControllerState(t *testing.T) {
 	}
 }
 
+func TestSimulationEndpointReturnsMemoryWithoutMutatingLiveCore(t *testing.T) {
+	core := nes.NewConsole()
+	s := NewServer(core, nil, nil)
+	if err := core.Poke(0x20, []byte{0x66}); err != nil {
+		t.Fatalf("poke live: %v", err)
+	}
+
+	body := []byte(`{
+		"sequences": [[128], [64]],
+		"frames_per_input": 1,
+		"memory_address": 32,
+		"memory_length": 1
+	}`)
+	req := httptest.NewRequest(http.MethodPost, "/v1/simulate/sequences", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	s.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("simulate status = %d body=%s", rec.Code, rec.Body.String())
+	}
+
+	var sr SimulationResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &sr); err != nil {
+		t.Fatalf("unmarshal simulate response: %v", err)
+	}
+	if len(sr.Results) != 2 || len(sr.Results[0].Bytes) != 1 {
+		t.Fatalf("unexpected simulate response: %+v", sr)
+	}
+
+	got, err := core.Peek(0x20, 1)
+	if err != nil {
+		t.Fatalf("peek live: %v", err)
+	}
+	if got[0] != 0x66 {
+		t.Fatalf("live core mutated by simulation: got 0x%02X", got[0])
+	}
+}
+
 func TestStateIncludesAudioStats(t *testing.T) {
 	core := nes.NewConsole()
 	state := core.State()

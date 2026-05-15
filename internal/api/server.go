@@ -47,6 +47,17 @@ type FM2LoadRequest struct {
 	Content string `json:"content,omitempty"`
 }
 
+type SimulationRequest struct {
+	Sequences      [][]int `json:"sequences"`
+	FramesPerInput int     `json:"frames_per_input"`
+	MemoryAddress  uint16  `json:"memory_address"`
+	MemoryLength   int     `json:"memory_length"`
+}
+
+type SimulationResponse struct {
+	Results []nes.SimulationResult `json:"results"`
+}
+
 type Server struct {
 	core         *nes.Console
 	hls          *streaming.HLSStreamer
@@ -80,6 +91,7 @@ func (s *Server) buildMux() http.Handler {
 	mux.HandleFunc("/v1/control/pause", s.handlePause)
 	mux.HandleFunc("/v1/control/resume", s.handleResume)
 	mux.HandleFunc("/v1/replay/fm2", s.handleFM2)
+	mux.HandleFunc("/v1/simulate/sequences", s.handleSimulateSequences)
 	mux.HandleFunc("/v1/memory/", s.handleMemory)
 	mux.HandleFunc("/v1/input/player/", s.handleInput)
 	mux.HandleFunc("/v1/retroarch/command", s.handleRetroArchCommand)
@@ -208,6 +220,41 @@ func (s *Server) handleFM2(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusAccepted)
+}
+
+func (s *Server) handleSimulateSequences(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var req SimulationRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	sequences := make([][]byte, 0, len(req.Sequences))
+	for _, seq := range req.Sequences {
+		converted := make([]byte, 0, len(seq))
+		for _, bitmask := range seq {
+			if bitmask < 0 || bitmask > 255 {
+				http.Error(w, "bitmask out of range", http.StatusBadRequest)
+				return
+			}
+			converted = append(converted, byte(bitmask))
+		}
+		sequences = append(sequences, converted)
+	}
+	results, err := s.core.SimulateInputSequences(
+		sequences,
+		req.FramesPerInput,
+		req.MemoryAddress,
+		req.MemoryLength,
+	)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	jsonResponse(w, http.StatusOK, SimulationResponse{Results: results})
 }
 
 func (s *Server) handleMemory(w http.ResponseWriter, r *http.Request) {
