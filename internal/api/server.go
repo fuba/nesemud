@@ -48,10 +48,11 @@ type FM2LoadRequest struct {
 }
 
 type SimulationRequest struct {
-	Sequences      [][]int `json:"sequences"`
-	FramesPerInput int     `json:"frames_per_input"`
-	MemoryAddress  uint16  `json:"memory_address"`
-	MemoryLength   int     `json:"memory_length"`
+	Sequences       [][]int `json:"sequences"`
+	FramesPerInput  int     `json:"frames_per_input"`
+	MemoryAddress   uint16  `json:"memory_address"`
+	MemoryLength    int     `json:"memory_length"`
+	TraceEveryInput bool    `json:"trace_every_input"`
 }
 
 type SimulationResponse struct {
@@ -249,6 +250,7 @@ func (s *Server) handleSimulateSequences(w http.ResponseWriter, r *http.Request)
 		req.FramesPerInput,
 		req.MemoryAddress,
 		req.MemoryLength,
+		req.TraceEveryInput,
 	)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)

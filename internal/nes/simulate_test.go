@@ -41,6 +41,7 @@ func TestSimulateInputSequencesDoesNotMutateLiveConsole(t *testing.T) {
 		1,
 		0x10,
 		1,
+		false,
 	)
 	if err != nil {
 		t.Fatalf("simulate: %v", err)
@@ -55,5 +56,39 @@ func TestSimulateInputSequencesDoesNotMutateLiveConsole(t *testing.T) {
 	}
 	if got[0] != 0x44 {
 		t.Fatalf("live RAM mutated by simulation: got 0x%02X", got[0])
+	}
+}
+
+func TestSimulateInputSequencesCanTraceEachInput(t *testing.T) {
+	c := NewConsole()
+	c.cart = buildTestCartridge([]byte{0xEA, 0x4C, 0x00, 0x80})
+	c.cpu.Reset(c)
+	if err := c.Poke(0x10, []byte{0x44}); err != nil {
+		t.Fatalf("poke live: %v", err)
+	}
+
+	results, err := c.SimulateInputSequences(
+		[][]byte{{0x80, 0x40}},
+		1,
+		0x10,
+		1,
+		true,
+	)
+	if err != nil {
+		t.Fatalf("simulate: %v", err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("result count = %d", len(results))
+	}
+	if len(results[0].Trace) != 2 {
+		t.Fatalf("trace count = %d", len(results[0].Trace))
+	}
+	for i, point := range results[0].Trace {
+		if point.InputIndex != i {
+			t.Fatalf("trace input index %d = %d", i, point.InputIndex)
+		}
+		if len(point.Bytes) != 1 {
+			t.Fatalf("trace bytes len %d = %d", i, len(point.Bytes))
+		}
 	}
 }

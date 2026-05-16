@@ -102,7 +102,8 @@ func TestSimulationEndpointReturnsMemoryWithoutMutatingLiveCore(t *testing.T) {
 		"sequences": [[128], [64]],
 		"frames_per_input": 1,
 		"memory_address": 32,
-		"memory_length": 1
+		"memory_length": 1,
+		"trace_every_input": true
 	}`)
 	req := httptest.NewRequest(http.MethodPost, "/v1/simulate/sequences", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -118,6 +119,9 @@ func TestSimulationEndpointReturnsMemoryWithoutMutatingLiveCore(t *testing.T) {
 	}
 	if len(sr.Results) != 2 || len(sr.Results[0].Bytes) != 1 {
 		t.Fatalf("unexpected simulate response: %+v", sr)
+	}
+	if len(sr.Results[0].Trace) != 1 || len(sr.Results[0].Trace[0].Bytes) != 1 {
+		t.Fatalf("unexpected simulate trace response: %+v", sr)
 	}
 
 	got, err := core.Peek(0x20, 1)
