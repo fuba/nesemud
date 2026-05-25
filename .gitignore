@@ -1,5 +1,9 @@
 runtime/nesd.log
 runtime/hls/
+recordings/
+dont_upload_roms/
+tmp/
+/nesd-record-hls
 tests/roms/*.nes
 tests/roms/*.log
 !tests/roms/.gitkeep

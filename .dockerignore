@@ -1,4 +1,7 @@
 .git
 runtime
 hls
+recordings
+dont_upload_roms
+tmp
 *.log

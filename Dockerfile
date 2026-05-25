@@ -3,7 +3,8 @@ WORKDIR /src
 COPY go.mod ./
 RUN go mod download
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /out/nesd ./cmd/nesd
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /out/nesd ./cmd/nesd \
+    && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /out/nesd-record-hls ./cmd/nesd-record-hls
 
 FROM debian:bookworm-slim
 RUN apt-get update \
@@ -11,6 +12,7 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=builder /out/nesd /usr/local/bin/nesd
+COPY --from=builder /out/nesd-record-hls /usr/local/bin/nesd-record-hls
 COPY docker/config.json /app/config.json
 RUN mkdir -p /data/hls
 EXPOSE 18080
