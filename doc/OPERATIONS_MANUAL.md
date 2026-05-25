@@ -220,15 +220,35 @@ curl -sS http://127.0.0.1:18080/v1/stream/stats
 head -n 20 runtime/hls/index.m3u8
 ```
 
-## 8. Operational Flow
+## 8. HLS Recording
+`nesd-record-hls` records any HLS playlist URL to MP4 and stores metadata next to the clip.
+
+Example:
+```bash
+go run ./cmd/nesd-record-hls \
+  --hls-url http://127.0.0.1:18080/hls/index.m3u8 \
+  --info-url http://127.0.0.1:18080/v1/state \
+  --output-dir recordings \
+  --session-name manual-run \
+  --duration 30s
+```
+
+Outputs:
+- `<clip>.mp4`
+- `<clip>.mp4.json`
+- `manifest.json`
+
+The sidecar and manifest include the source HLS URL, optional metadata URL, start/end timestamps, recording reason, and start/end JSON snapshots when `--info-url` is supplied.
+
+## 9. Operational Flow
 1. Start daemon
 2. Load ROM with `POST /v1/rom/load`
 3. Optionally inject replay with `POST /v1/replay/fm2`
 4. Verify runtime state with `GET /v1/state`
 5. Play stream from `/hls/index.m3u8`
 
-## 9. Troubleshooting
-### 9.1 HLS not generated
+## 10. Troubleshooting
+### 10.1 HLS not generated
 Check:
 ```bash
 curl -sS http://127.0.0.1:18080/v1/stream/stats
@@ -241,7 +261,7 @@ Look for:
 - `runtime/hls/index.m3u8` and `.ts` files present
 - FFmpeg running inside container
 
-### 9.2 No audio
+### 10.2 No audio
 Check:
 - Whether segments include an audio stream
 ```bash
@@ -252,7 +272,7 @@ docker compose exec -T nesd ffprobe -v error -show_streams /data/hls/index0.ts
 docker compose exec -T nesd sh -lc 'f=$(ls -1 /data/hls/*.ts | tail -n 1); ffmpeg -hide_banner -i "$f" -vn -af volumedetect -f null - 2>&1 | tail -n 20'
 ```
 
-### 9.3 API not responding
+### 10.3 API not responding
 Check:
 - Daemon process is running
 - Port `18080` is not in conflict
