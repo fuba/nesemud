@@ -1,7 +1,7 @@
 # nesemud Operations Manual
 
 ## 1. Overview
-`nesemud` runs a NES emulator as a daemon, controls it through HTTP APIs, and streams video/audio through HLS.
+`nesemud` runs a NES emulator as a daemon, controls it through HTTP APIs, and streams video/audio through HLS and DIFI NTSC-M RF.
 
 Design assumptions:
 - All runtime control is API-driven
@@ -13,6 +13,7 @@ Design assumptions:
 - Emulator core: `internal/nes`
 - API layer: `internal/api`
 - HLS streamer: `internal/streaming`
+- DIFI RF synthesizer and relay: `internal/rfstream`
 - Validation tools: `cmd/nes-validate`, `internal/validation`
 
 Default port:
@@ -21,6 +22,7 @@ Default port:
 Default endpoints:
 - API: `http://127.0.0.1:18080/v1/...`
 - HLS: `http://127.0.0.1:18080/hls/index.m3u8`
+- DIFI WebSocket: `ws://127.0.0.1:18080/udp`
 
 ## 3. Requirements
 Local runtime:
@@ -47,6 +49,7 @@ Basic checks:
 ```bash
 curl -sS http://127.0.0.1:18080/v1/state
 curl -sS http://127.0.0.1:18080/v1/stream/stats
+curl -sS http://127.0.0.1:18080/v1/rf/stats
 ls -la runtime/hls
 ```
 
@@ -67,7 +70,15 @@ Config JSON example:
 {
   "listen_addr": ":18080",
   "log_file": "./nesd.log",
-  "hls_dir": "./hls"
+  "hls_dir": "./hls",
+  "rf_output": {
+    "enabled": false,
+    "address": "127.0.0.1:23000",
+    "allow_remote": false,
+    "stream_id": 1314149187,
+    "rf_center_hz": 189000000,
+    "samples_per_packet": 356
+  }
 }
 ```
 
@@ -75,6 +86,7 @@ Fields:
 - `listen_addr`: API/HLS bind address
 - `log_file`: daemon log file path
 - `hls_dir`: HLS output directory
+- `rf_output`: optional DIFI NTSC-M RF UDP and direct WebSocket output
 
 Hot reload:
 - Send `SIGHUP` to reload configuration (`listen_addr` is not re-bound dynamically)
@@ -204,6 +216,26 @@ Key fields:
 - `written_frames`: frames successfully enqueued/written toward FFmpeg pipeline
 - `dropped_frames`: frames dropped under queue pressure
 - `queue_depth`, `queue_capacity`: internal queue status
+
+### 6.10 DIFI RF output
+
+- `GET /v1/rf/stats`
+- `WS /udp`
+
+The public receiver URL is `wss://nesemud.home.fuba.dev/udp`. The WebSocket
+payload uses CRT-compatible NCB1 bundles containing complete DIFI datagrams.
+
+Key statistics:
+- `data_packets`, `context_packets`, `version_packets`: generated DIFI packets
+- `udp_packets_sent`, `udp_bytes_sent`: successful kernel UDP writes
+- `transport_drops`: transient UDP write drops
+- `sample_loss_pending`: whether a loss indication still awaits a delivered Signal Context
+- `websocket_clients`, `websocket_disconnects`: direct relay client status
+
+Continuity check:
+```bash
+node scripts/measure-difi-ws.mjs wss://nesemud.home.fuba.dev/udp 5000
+```
 
 ## 7. HLS Streaming
 Playlist URL:
