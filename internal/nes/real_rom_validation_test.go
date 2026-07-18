@@ -43,3 +43,23 @@ func TestGradiusLongRunProducesAudioAndVideo(t *testing.T) {
 		t.Fatalf("expected gradius to configure APU frame counter")
 	}
 }
+
+func BenchmarkStepFrameRealROM(b *testing.B) {
+	path := os.Getenv("NESEMUD_BENCH_ROM")
+	if path == "" {
+		b.Skip("NESEMUD_BENCH_ROM is not set")
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		b.Fatal(err)
+	}
+	c := NewConsole()
+	if err := c.LoadROMContent(data); err != nil {
+		b.Fatal(err)
+	}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		c.StepFrame()
+	}
+}
