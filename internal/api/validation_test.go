@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"nesemud/internal/nes"
+	"nesemud/internal/rfstream"
 	"nesemud/internal/streaming"
 )
 
@@ -45,6 +46,23 @@ func TestStreamStatsEndpoint(t *testing.T) {
 	}
 	if !bytes.Contains(rec.Body.Bytes(), []byte("running")) {
 		t.Fatalf("expected running field")
+	}
+}
+
+func TestRFStatsEndpoint(t *testing.T) {
+	core := nes.NewConsole()
+	rf := &rfstream.Streamer{}
+	s := NewServer(core, nil, nil, rf)
+	req := httptest.NewRequest(http.MethodGet, "/v1/rf/stats", nil)
+	rec := httptest.NewRecorder()
+	s.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	for _, field := range [][]byte{[]byte("transport_drops"), []byte("data_packets"), []byte("websocket_clients")} {
+		if !bytes.Contains(rec.Body.Bytes(), field) {
+			t.Fatalf("response %q does not contain %q", rec.Body.String(), field)
+		}
 	}
 }
 

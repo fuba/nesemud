@@ -14,6 +14,7 @@ import (
 	"github.com/pion/webrtc/v4"
 
 	"nesemud/internal/nes"
+	"nesemud/internal/rfstream"
 	"nesemud/internal/streaming"
 	"nesemud/internal/validation"
 )
@@ -63,12 +64,17 @@ type Server struct {
 	core         *nes.Console
 	hls          *streaming.HLSStreamer
 	webrtc       *streaming.WebRTCStreamer
+	rf           *rfstream.Streamer
 	router       http.Handler
 	validationMu sync.Mutex
 }
 
-func NewServer(core *nes.Console, hls *streaming.HLSStreamer, webrtc *streaming.WebRTCStreamer) *Server {
-	s := &Server{core: core, hls: hls, webrtc: webrtc}
+func NewServer(core *nes.Console, hls *streaming.HLSStreamer, webrtc *streaming.WebRTCStreamer, rf ...*rfstream.Streamer) *Server {
+	var rfStreamer *rfstream.Streamer
+	if len(rf) > 0 {
+		rfStreamer = rf[0]
+	}
+	s := &Server{core: core, hls: hls, webrtc: webrtc, rf: rfStreamer}
 	s.router = s.buildMux()
 	return s
 }
@@ -79,6 +85,9 @@ func (s *Server) Handler() http.Handler {
 
 func (s *Server) buildMux() http.Handler {
 	mux := http.NewServeMux()
+	mux.HandleFunc("/{$}", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/web", http.StatusTemporaryRedirect)
+	})
 	mux.HandleFunc("/web", s.handleWeb)
 	mux.HandleFunc("/web/", s.handleWeb)
 	mux.HandleFunc("/v1/openapi.json", func(w http.ResponseWriter, _ *http.Request) {
@@ -101,6 +110,8 @@ func (s *Server) buildMux() http.Handler {
 	mux.HandleFunc("/v1/validate/nestest", s.handleNESTestValidation)
 	mux.HandleFunc("/v1/validate/suite", s.handleSuiteValidation)
 	mux.HandleFunc("/v1/stream/stats", s.handleStreamStats)
+	mux.HandleFunc("/v1/rf/stats", s.handleRFStats)
+	mux.HandleFunc("/udp", s.handleRFWebSocket)
 	mux.HandleFunc("/v1/webrtc/offer", s.handleWebRTCOffer)
 	mux.HandleFunc("/v1/webrtc/stats", s.handleWebRTCStats)
 	return mux
@@ -518,6 +529,26 @@ func (s *Server) handleStreamStats(w http.ResponseWriter, r *http.Request) {
 	}
 	st := s.hls.Stats()
 	jsonResponse(w, http.StatusOK, st)
+}
+
+func (s *Server) handleRFStats(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if s.rf == nil {
+		jsonResponse(w, http.StatusOK, rfstream.StreamerStats{})
+		return
+	}
+	jsonResponse(w, http.StatusOK, s.rf.Stats())
+}
+
+func (s *Server) handleRFWebSocket(w http.ResponseWriter, r *http.Request) {
+	if s.rf == nil {
+		http.Error(w, "RF output unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	s.rf.ServeWebSocket(w, r)
 }
 
 func (s *Server) handleWebRTCOffer(w http.ResponseWriter, r *http.Request) {

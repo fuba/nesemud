@@ -1,5 +1,13 @@
 {
   "listen_addr": ":18080",
   "log_file": "./nesd.log",
-  "hls_dir": "./hls"
+  "hls_dir": "./hls",
+  "rf_output": {
+    "enabled": false,
+    "address": "127.0.0.1:23000",
+    "allow_remote": false,
+    "stream_id": 1314149187,
+    "rf_center_hz": 189000000,
+    "samples_per_packet": 356
+  }
 }

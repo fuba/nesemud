@@ -15,6 +15,7 @@ import (
 	"nesemud/internal/api"
 	"nesemud/internal/config"
 	"nesemud/internal/nes"
+	"nesemud/internal/rfstream"
 	"nesemud/internal/streaming"
 )
 
@@ -25,6 +26,7 @@ type Service struct {
 	core    *nes.Console
 	hls     *streaming.HLSStreamer
 	webrtc  *streaming.WebRTCStreamer
+	rf      *rfstream.Streamer
 	server  *http.Server
 }
 
@@ -32,7 +34,8 @@ func New(cfgPath string, cfg config.Config, logger *log.Logger) *Service {
 	core := nes.NewConsole()
 	hls := streaming.NewHLSStreamer()
 	webrtc := streaming.NewWebRTCStreamer()
-	apiSrv := api.NewServer(core, hls, webrtc)
+	rf := &rfstream.Streamer{}
+	apiSrv := api.NewServer(core, hls, webrtc, rf)
 	return &Service{
 		cfgPath: cfgPath,
 		cfg:     cfg,
@@ -40,6 +43,7 @@ func New(cfgPath string, cfg config.Config, logger *log.Logger) *Service {
 		core:    core,
 		hls:     hls,
 		webrtc:  webrtc,
+		rf:      rf,
 		server: &http.Server{
 			Addr:              cfg.ListenAddr,
 			Handler:           withHLSStatic(apiSrv.Handler(), cfg.HLSDir),
@@ -54,6 +58,7 @@ func New(cfgPath string, cfg config.Config, logger *log.Logger) *Service {
 func (s *Service) Run(ctx context.Context) error {
 	ctx, cancel := signal.NotifyContext(ctx, syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
+	rfConfig := s.cfg.RFOutput
 
 	if err := s.hls.Start(ctx, s.cfg.HLSDir); err != nil {
 		return err
@@ -63,8 +68,14 @@ func (s *Service) Run(ctx context.Context) error {
 		return err
 	}
 	defer func() { _ = s.webrtc.Stop() }()
+	if err := s.startRFOutput(ctx, rfConfig); err != nil {
+		return err
+	}
+	if rfConfig.Enabled {
+		defer func() { _ = s.rf.Stop() }()
+	}
 
-	go s.frameLoop(ctx)
+	go s.frameLoop(ctx, rfConfig.Enabled)
 	go s.watchReloadSignals(ctx)
 
 	s.logger.Printf("listening on %s", s.cfg.ListenAddr)
@@ -88,14 +99,17 @@ func (s *Service) Run(ctx context.Context) error {
 	}
 }
 
-func (s *Service) frameLoop(ctx context.Context) {
-	t := time.NewTicker(time.Second / nes.TargetFPS)
-	defer t.Stop()
+func (s *Service) frameLoop(ctx context.Context, rfEnabled bool) {
+	clockStart := time.Now()
+	frameNumber := uint64(1)
+	deadline := frameDeadline(clockStart, frameNumber)
+	timer := time.NewTimer(frameWait(deadline, time.Now()))
+	defer timer.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case <-t.C:
+		case <-timer.C:
 			s.core.StepFrame()
 			frame := s.core.SnapshotFrame()
 			audio := s.core.SnapshotAudio()
@@ -105,7 +119,56 @@ func (s *Service) frameLoop(ctx context.Context) {
 			if err := s.webrtc.WriteFrame(frame, audio); err != nil {
 				s.logger.Printf("webrtc write error: %v", err)
 			}
+			s.writeRFFrame(rfEnabled, frame, audio)
+			frameNumber++
+			deadline = frameDeadline(clockStart, frameNumber)
+			if time.Since(deadline) > 12*time.Second/nes.TargetFPS {
+				clockStart = time.Now()
+				frameNumber = 1
+				deadline = frameDeadline(clockStart, frameNumber)
+			}
+			timer.Reset(frameWait(deadline, time.Now()))
 		}
+	}
+}
+
+func frameDeadline(start time.Time, frameNumber uint64) time.Time {
+	return start.Add(time.Duration(frameNumber) * time.Second / nes.TargetFPS)
+}
+
+func frameWait(deadline, now time.Time) time.Duration {
+	wait := deadline.Sub(now)
+	if wait < 0 {
+		return 0
+	}
+	return wait
+}
+
+func limitFrameCatchUp(deadline, now time.Time) time.Time {
+	const maxCatchUpFrames = 12
+	framePeriod := time.Second / nes.TargetFPS
+	if now.Sub(deadline) > maxCatchUpFrames*framePeriod {
+		return frameDeadline(now, 1)
+	}
+	return deadline
+}
+
+func (s *Service) startRFOutput(ctx context.Context, cfg config.RFOutputConfig) error {
+	if !cfg.Enabled {
+		return nil
+	}
+	if err := s.rf.Start(ctx, cfg.Address, cfg.StreamID, cfg.RFCenterHz, cfg.SamplesPerPacket); err != nil {
+		return fmt.Errorf("start RF output: %w", err)
+	}
+	return nil
+}
+
+func (s *Service) writeRFFrame(enabled bool, frame []byte, audio []int16) {
+	if !enabled || !s.rf.Stats().Running {
+		return
+	}
+	if err := s.rf.WriteFrame(frame, audio); err != nil {
+		s.logger.Printf("rf write error: %v", err)
 	}
 }
 
@@ -128,6 +191,10 @@ func (s *Service) reload() {
 	if err != nil {
 		s.logger.Printf("reload failed: %v", err)
 		return
+	}
+	if cfg.RFOutput != s.cfg.RFOutput {
+		s.logger.Printf("RF output changes require restart; keeping active RF configuration")
+		cfg.RFOutput = s.cfg.RFOutput
 	}
 	s.cfg = cfg
 	s.logger.Printf("reloaded config from %s", s.cfgPath)

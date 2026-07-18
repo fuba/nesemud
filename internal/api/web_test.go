@@ -9,6 +9,21 @@ import (
 	"nesemud/internal/nes"
 )
 
+func TestRootRedirectsToWebUI(t *testing.T) {
+	s := NewServer(nes.NewConsole(), nil, nil)
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+
+	s.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusTemporaryRedirect {
+		t.Fatalf("status=%d, want %d", rec.Code, http.StatusTemporaryRedirect)
+	}
+	if location := rec.Header().Get("Location"); location != "/web" {
+		t.Fatalf("Location=%q, want /web", location)
+	}
+}
+
 func TestWebPageServed(t *testing.T) {
 	s := NewServer(nes.NewConsole(), nil, nil)
 

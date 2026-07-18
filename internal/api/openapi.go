@@ -19,6 +19,7 @@ const openAPISpec = `{
     },
     "/v1/input/player/{id}": {"put": {"responses": {"204": {"description": "updated"}}}},
     "/v1/control/pause": {"post": {"responses": {"202": {"description": "accepted"}}}},
-    "/v1/control/resume": {"post": {"responses": {"202": {"description": "accepted"}}}}
+    "/v1/control/resume": {"post": {"responses": {"202": {"description": "accepted"}}}},
+    "/v1/rf/stats": {"get": {"responses": {"200": {"description": "DIFI RF sender and WebSocket relay statistics"}}}}
   }
 }`
