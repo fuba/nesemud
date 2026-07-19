@@ -7,6 +7,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"math"
 	"net"
 	"net/http"
 	"runtime"
@@ -22,24 +23,28 @@ var (
 )
 
 type StreamerStats struct {
-	Running              bool   `json:"running"`
-	FramesAccepted       uint64 `json:"frames_accepted"`
-	FramesDropped        uint64 `json:"frames_dropped"`
-	FramesSent           uint64 `json:"frames_sent"`
-	DataPackets          uint64 `json:"data_packets"`
-	ContextPackets       uint64 `json:"context_packets"`
-	VersionPackets       uint64 `json:"version_packets"`
-	UDPPacketsSent       uint64 `json:"udp_packets_sent"`
-	UDPBytesSent         uint64 `json:"udp_bytes_sent"`
-	TransportDrops       uint64 `json:"transport_drops"`
-	SampleLossPending    bool   `json:"sample_loss_pending"`
-	QueueDepth           int    `json:"queue_depth"`
-	WebSocketClients     int    `json:"websocket_clients"`
-	WebSocketBundles     uint64 `json:"websocket_bundles"`
-	WebSocketPackets     uint64 `json:"websocket_packets"`
-	WebSocketBytes       uint64 `json:"websocket_bytes"`
-	WebSocketDisconnects uint64 `json:"websocket_disconnects"`
-	LastError            string `json:"last_error,omitempty"`
+	Running              bool    `json:"running"`
+	FramesAccepted       uint64  `json:"frames_accepted"`
+	FramesDropped        uint64  `json:"frames_dropped"`
+	FramesSent           uint64  `json:"frames_sent"`
+	DataPackets          uint64  `json:"data_packets"`
+	ContextPackets       uint64  `json:"context_packets"`
+	VersionPackets       uint64  `json:"version_packets"`
+	UDPPacketsSent       uint64  `json:"udp_packets_sent"`
+	UDPBytesSent         uint64  `json:"udp_bytes_sent"`
+	TransportDrops       uint64  `json:"transport_drops"`
+	SampleLossPending    bool    `json:"sample_loss_pending"`
+	QueueDepth           int     `json:"queue_depth"`
+	WebSocketClients     int     `json:"websocket_clients"`
+	WebSocketBundles     uint64  `json:"websocket_bundles"`
+	WebSocketPackets     uint64  `json:"websocket_packets"`
+	WebSocketBytes       uint64  `json:"websocket_bytes"`
+	WebSocketDisconnects uint64  `json:"websocket_disconnects"`
+	AudioInputPeak       float64 `json:"audio_input_peak"`
+	AudioInputRMS        float64 `json:"audio_input_rms"`
+	AudioRealSamples     uint64  `json:"audio_real_samples"`
+	AudioPaddedSamples   uint64  `json:"audio_padded_samples"`
+	LastError            string  `json:"last_error,omitempty"`
 }
 
 type sendOutcome uint8
@@ -279,12 +284,14 @@ func (s *Streamer) synthesizeLoop(ctx context.Context, queue <-chan inputFrame, 
 		firstIndex := sourceFieldIndex(outputField)
 		secondIndex := sourceFieldIndex(outputField + 1)
 		audioCount := audioSamplesForRFFrame(outputFrame)
-		if !inputs.fill(ctx, queue, secondIndex, audioCount+2, outputFrame > 0) {
+		if !inputs.fill(ctx, queue, secondIndex, audioCount+2) {
 			return
 		}
 		first := inputs.video[firstIndex]
 		second := inputs.video[secondIndex]
 		audio := inputs.audioWindow(audioCount + 2)
+		audioPeak, audioRMS := audioLevel(audio[:audioCount])
+		s.recordAudioInput(audioPeak, audioRMS, inputs.realAudioSamples, inputs.paddedAudioSamples)
 		var buffer []IQSample
 		select {
 		case <-ctx.Done():
@@ -311,12 +318,14 @@ func (s *Streamer) synthesizeLoop(ctx context.Context, queue <-chan inputFrame, 
 }
 
 type rfInputBuffer struct {
-	video        map[uint64][]byte
-	audio        []float64
-	audioHead    int
-	nextSequence uint64
-	lastRGB      []byte
-	blackRGB     []byte
+	video              map[uint64][]byte
+	audio              []float64
+	audioHead          int
+	nextSequence       uint64
+	lastRGB            []byte
+	blackRGB           []byte
+	realAudioSamples   uint64
+	paddedAudioSamples uint64
 }
 
 func newRFInputBuffer() *rfInputBuffer {
@@ -327,32 +336,13 @@ func newRFInputBuffer() *rfInputBuffer {
 	}
 }
 
-func (b *rfInputBuffer) fill(ctx context.Context, queue <-chan inputFrame, videoIndex uint64, audioSamples int, allowPadding bool) bool {
+func (b *rfInputBuffer) fill(ctx context.Context, queue <-chan inputFrame, videoIndex uint64, audioSamples int) bool {
 	for b.nextSequence <= videoIndex || len(b.audio)-b.audioHead < audioSamples {
-		if !allowPadding {
-			frame, ok := receiveInput(ctx, queue)
-			if !ok {
-				return false
-			}
-			b.append(frame)
-			continue
-		}
-		timer := time.NewTimer(2 * time.Millisecond)
-		select {
-		case <-ctx.Done():
-			timer.Stop()
+		frame, ok := receiveInput(ctx, queue)
+		if !ok {
 			return false
-		case frame := <-queue:
-			if !timer.Stop() {
-				select {
-				case <-timer.C:
-				default:
-				}
-			}
-			b.append(frame)
-		case <-timer.C:
-			b.pad()
 		}
+		b.append(frame)
 	}
 	return true
 }
@@ -371,6 +361,7 @@ func (b *rfInputBuffer) append(frame inputFrame) {
 		for range StereoSamplesPerInputFrame / 2 {
 			b.audio = append(b.audio, 0)
 		}
+		b.paddedAudioSamples += StereoSamplesPerInputFrame / 2
 		b.nextSequence++
 	}
 	b.video[frame.sequence] = frame.rgb
@@ -378,20 +369,36 @@ func (b *rfInputBuffer) append(frame inputFrame) {
 		mono := float64(int32(frame.audio[index])+int32(frame.audio[index+1])) / (2 * 32768)
 		b.audio = append(b.audio, mono)
 	}
+	b.realAudioSamples += uint64(len(frame.audio) / 2)
 	b.lastRGB = frame.rgb
 	b.nextSequence = frame.sequence + 1
 }
 
-func (b *rfInputBuffer) pad() {
-	fallback := b.lastRGB
-	if fallback == nil {
-		fallback = b.blackRGB
+func audioLevel(samples []float64) (float64, float64) {
+	var peak, sumSquares float64
+	for _, sample := range samples {
+		absolute := sample
+		if absolute < 0 {
+			absolute = -absolute
+		}
+		if absolute > peak {
+			peak = absolute
+		}
+		sumSquares += sample * sample
 	}
-	b.video[b.nextSequence] = fallback
-	for range StereoSamplesPerInputFrame / 2 {
-		b.audio = append(b.audio, 0)
+	if len(samples) == 0 {
+		return 0, 0
 	}
-	b.nextSequence++
+	return peak, math.Sqrt(sumSquares / float64(len(samples)))
+}
+
+func (s *Streamer) recordAudioInput(peak, rms float64, realSamples, paddedSamples uint64) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.stats.AudioInputPeak = peak
+	s.stats.AudioInputRMS = rms
+	s.stats.AudioRealSamples = realSamples
+	s.stats.AudioPaddedSamples = paddedSamples
 }
 
 func (b *rfInputBuffer) audioWindow(samples int) []float64 {
