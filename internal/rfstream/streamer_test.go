@@ -164,11 +164,18 @@ func TestWaitUntilHonorsDeadlineAndCancellation(t *testing.T) {
 	}
 }
 
-func TestRFInputBufferPaddingDoesNotRewindForLateFrames(t *testing.T) {
+func TestRFInputBufferSequenceGapDoesNotRewindForLateFrames(t *testing.T) {
 	buffer := newRFInputBuffer()
-	buffer.pad()
-	if buffer.nextSequence != 1 || len(buffer.audio) != StereoSamplesPerInputFrame/2 {
-		t.Fatalf("padded state sequence=%d audio=%d", buffer.nextSequence, len(buffer.audio))
+	buffer.append(inputFrame{
+		sequence: 1,
+		rgb:      solidFrame(4, 5, 6),
+		audio:    make([]int16, StereoSamplesPerInputFrame),
+	})
+	if buffer.nextSequence != 2 || len(buffer.audio) != StereoSamplesPerInputFrame {
+		t.Fatalf("gap state sequence=%d audio=%d", buffer.nextSequence, len(buffer.audio))
+	}
+	if buffer.realAudioSamples != StereoSamplesPerInputFrame/2 || buffer.paddedAudioSamples != StereoSamplesPerInputFrame/2 {
+		t.Fatalf("padding counters real=%d padded=%d", buffer.realAudioSamples, buffer.paddedAudioSamples)
 	}
 	late := inputFrame{
 		sequence: 0,
@@ -176,11 +183,51 @@ func TestRFInputBufferPaddingDoesNotRewindForLateFrames(t *testing.T) {
 		audio:    make([]int16, StereoSamplesPerInputFrame),
 	}
 	buffer.append(late)
-	if buffer.nextSequence != 1 || len(buffer.audio) != StereoSamplesPerInputFrame/2 {
+	if buffer.nextSequence != 2 || len(buffer.audio) != StereoSamplesPerInputFrame {
 		t.Fatalf("late input rewound timeline: sequence=%d audio=%d", buffer.nextSequence, len(buffer.audio))
 	}
 	if &buffer.lastRGB[0] != &late.rgb[0] {
 		t.Fatal("late input did not refresh the next video field")
+	}
+}
+
+func TestRFInputBufferReportsNormalizedProgramLevel(t *testing.T) {
+	buffer := newRFInputBuffer()
+	audio := sineStereo(440, StereoSamplesPerInputFrame/2)
+	buffer.append(inputFrame{sequence: 0, rgb: solidFrame(1, 2, 3), audio: audio})
+
+	peak, rms := audioLevel(buffer.audioWindow(len(audio) / 2))
+	if peak < 0.48 || peak > 0.50 {
+		t.Fatalf("normalized peak=%g, want 0.48..0.50", peak)
+	}
+	if rms < 0.33 || rms > 0.36 {
+		t.Fatalf("normalized RMS=%g, want 0.33..0.36", rms)
+	}
+	if buffer.realAudioSamples != uint64(len(audio)/2) || buffer.paddedAudioSamples != 0 {
+		t.Fatalf("audio counters real=%d padded=%d", buffer.realAudioSamples, buffer.paddedAudioSamples)
+	}
+}
+
+func TestRFInputBufferWaitsForRealAudioInsteadOfSpeculativePadding(t *testing.T) {
+	buffer := newRFInputBuffer()
+	queue := make(chan inputFrame, 1)
+	audio := sineStereo(440, StereoSamplesPerInputFrame/2)
+	go func() {
+		time.Sleep(5 * time.Millisecond)
+		queue <- inputFrame{sequence: 0, rgb: solidFrame(1, 2, 3), audio: audio}
+	}()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	if !buffer.fill(ctx, queue, 0, len(audio)/2) {
+		t.Fatal("buffer fill stopped before receiving input")
+	}
+	if buffer.realAudioSamples != uint64(len(audio)/2) || buffer.paddedAudioSamples != 0 {
+		t.Fatalf("audio counters real=%d padded=%d", buffer.realAudioSamples, buffer.paddedAudioSamples)
+	}
+	_, rms := audioLevel(buffer.audioWindow(len(audio) / 2))
+	if rms < 0.33 {
+		t.Fatalf("real audio was replaced by speculative silence: RMS=%g", rms)
 	}
 }
 

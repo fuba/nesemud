@@ -160,6 +160,43 @@ func TestSynthesizeFrameContainsVideoAndFMAuralCarriers(t *testing.T) {
 	}
 }
 
+func TestFMAuralRoundTripPreservesProgramLevel(t *testing.T) {
+	frame := detailedFrame()
+	audio := make([]int16, StereoSamplesPerInputFrame)
+	for index := 0; index < len(audio)/2; index++ {
+		seconds := float64(index) / InputAudioSampleRate
+		value := 2_700*math.Sin(2*math.Pi*440*seconds) +
+			1_100*math.Sin(2*math.Pi*1_370*seconds)
+		sample := int16(math.Round(value))
+		audio[index*2], audio[index*2+1] = sample, sample
+	}
+
+	iq, err := NewSynthesizer().SynthesizeFrame(frame, frame, audio, audio)
+	if err != nil {
+		t.Fatal(err)
+	}
+	recovered := demodulateAuralLikeCRT(iq, len(audio)/2)
+	inputRMS := normalizedStereoRMS(audio)
+	recoveredRMS := signalRMS(recovered[32:])
+	ratio := recoveredRMS / inputRMS
+	if ratio < 0.8 || ratio > 1.2 {
+		t.Fatalf("FM audio RMS ratio=%g (input=%g recovered=%g), want 0.8..1.2", ratio, inputRMS, recoveredRMS)
+	}
+}
+
+func detailedFrame() []byte {
+	frame := make([]byte, RGBWidth*RGBHeight*3)
+	for y := 0; y < RGBHeight; y++ {
+		for x := 0; x < RGBWidth; x++ {
+			offset := (y*RGBWidth + x) * 3
+			frame[offset] = byte((x*73 + y*151) & 0xff)
+			frame[offset+1] = byte((x*197 + y*47) & 0xff)
+			frame[offset+2] = byte((x*29 + y*223) & 0xff)
+		}
+	}
+	return frame
+}
+
 func TestVSBFilterRejectsLowerSidebandAndKeepsUpperChannel(t *testing.T) {
 	filter := designVSBFilter(vsbFilterTaps)
 	blocked := filterPower(filter, -5_000_000)
@@ -330,6 +367,58 @@ func tonePower(iq []IQSample, frequency float64) float64 {
 
 func magnitude(sample IQSample) float64 {
 	return math.Hypot(float64(sample.I), float64(sample.Q))
+}
+
+func demodulateAuralLikeCRT(iq []IQSample, outputSamples int) []float64 {
+	phasor := func(center int) complex128 {
+		var mixed complex128
+		var weightSum float64
+		for tap := -64; tap <= 64; tap++ {
+			index := center + tap
+			if index < 0 || index >= len(iq) {
+				continue
+			}
+			weight := 0.5 + 0.5*math.Cos(math.Pi*float64(tap)/64)
+			phase := -2 * math.Pi * auralCarrierHz * float64(index) / SampleRate
+			carrier := complex(math.Cos(phase), math.Sin(phase))
+			sample := complex(float64(iq[index].I)/32768, float64(iq[index].Q)/32768)
+			mixed += sample * carrier * complex(weight, 0)
+			weightSum += weight
+		}
+		return mixed / complex(weightSum, 0)
+	}
+	phaseDelta := func(first, second complex128) float64 {
+		return math.Atan2(imag(complex(real(first), -imag(first))*second), real(complex(real(first), -imag(first))*second))
+	}
+
+	output := make([]float64, outputSamples)
+	halfStep := int(math.Round(SampleRate / (InputAudioSampleRate * 2)))
+	fullStep := int(math.Round(SampleRate / InputAudioSampleRate))
+	for index := range output {
+		center := int(math.Round(float64(index) * SampleRate / InputAudioSampleRate))
+		previous := phasor(center - fullStep)
+		middle := phasor(center - halfStep)
+		current := phasor(center)
+		deviation := (phaseDelta(previous, middle) + phaseDelta(middle, current)) * InputAudioSampleRate / (2 * math.Pi)
+		output[index] = deviation / auralDeviationHz
+	}
+	return output
+}
+
+func normalizedStereoRMS(samples []int16) float64 {
+	mono := make([]float64, 0, len(samples)/2)
+	for index := 0; index < len(samples); index += 2 {
+		mono = append(mono, float64(int32(samples[index])+int32(samples[index+1]))/(2*32768))
+	}
+	return signalRMS(mono)
+}
+
+func signalRMS(samples []float64) float64 {
+	var power float64
+	for _, sample := range samples {
+		power += sample * sample
+	}
+	return math.Sqrt(power / float64(len(samples)))
 }
 
 func filterPower(filter []carrierSample, frequency float64) float64 {
